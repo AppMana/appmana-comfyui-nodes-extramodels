@@ -1,41 +1,25 @@
+This fork is an installable version of the ComfyUI Extra Models nodes authored by **City96**.
+
 # Extra Models for ComfyUI
 
 This repository aims to add support for various different image diffusion models to ComfyUI.
 
 ## Installation
 
-Simply clone this repo to your custom_nodes folder using the following command:
+You must install the corresponding version of `xformers` for your `torch` version:
 
-`git clone https://github.com/city96/ComfyUI_ExtraModels custom_nodes/ComfyUI_ExtraModels`
-
-You will also have to install the requirements from the provided file by running `pip install -r requirements.txt` inside your VENV/conda env. If you downloaded the standalone version of ComfyUI, then follow the steps below.
-
-### Standalone ComfyUI
-
-I haven't tested this completely, so if you know what you're doing, use the regular venv/`git clone` install option when installing ComfyUI.
-
-Go to the where you unpacked `ComfyUI_windows_portable` to (where your run_nvidia_gpu.bat file is) and open a command line window. Press `CTRL+SHIFT+Right click` in an empty space and click "Open PowerShell window here".
-
-Clone the repository to your custom nodes folder, assuming haven't installed in through the manager.
-
-`git clone https://github.com/city96/ComfyUI_ExtraModels .\ComfyUI\custom_nodes\ComfyUI_ExtraModels`
-
-To install the requirements on windows, run these commands in the same window:
-```
-.\python_embeded\python.exe -s -m pip install -r .\ComfyUI\custom_nodes\ComfyUI_ExtraModels\requirements.txt
-.\python_embeded\python.exe -s -m pip install bitsandbytes --prefer-binary --extra-index-url=https://jllllll.github.io/bitsandbytes-windows-webui
+```shell
+# torch 2.2.1:
+pip install --no-deps --no-build-isolation xformers==0.0.25
+# torch 2.3.0:
+pip install --no-deps --no-build-isolation xformers==0.0.26
 ```
 
-To update, open the command line window like before and run the following commands:
+Then, install:
 
+```shell
+pip install git+https://github.com/AppMana/ComfyUI_ExtraModels.git
 ```
-cd .\ComfyUI\custom_nodes\ComfyUI_ExtraModels\
-git pull
-```
-
-Alternatively, use the manager, assuming it has an update function.
-
-
 
 ## PixArt
 
