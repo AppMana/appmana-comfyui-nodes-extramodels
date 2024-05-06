@@ -12,7 +12,7 @@ You must install the corresponding version of `xformers` for your `torch` versio
 # torch 2.2.1:
 pip install --no-deps --no-build-isolation xformers==0.0.25
 # torch 2.3.0:
-pip install --no-deps --no-build-isolation xformers==0.0.26
+pip install --no-deps --no-build-isolation xformers==0.0.26.post1
 ```
 
 Then, install:
