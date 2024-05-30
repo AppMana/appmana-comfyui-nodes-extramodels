@@ -1,1 +1,5 @@
-{"eos_token": "</s>", "unk_token": "<unk>", "pad_token": "<pad>"}
+{
+  "eos_token": "</s>",
+  "unk_token": "<unk>",
+  "pad_token": "<pad>"
+}

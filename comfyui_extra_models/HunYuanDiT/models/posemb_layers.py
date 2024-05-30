@@ -1,6 +1,7 @@
-import torch
-import numpy as np
 from typing import Union
+
+import numpy as np
+import torch
 
 
 def _to_tuple(x):
@@ -10,12 +11,12 @@ def _to_tuple(x):
         return x
 
 
-def get_fill_resize_and_crop(src, tgt):    # src 来源的分辨率   tgt base 分辨率
+def get_fill_resize_and_crop(src, tgt):  # src 来源的分辨率   tgt base 分辨率
     th, tw = _to_tuple(tgt)
     h, w = _to_tuple(src)
 
-    tr = th / tw        # base 分辨率
-    r = h / w           # 目标分辨率
+    tr = th / tw  # base 分辨率
+    r = h / w  # 目标分辨率
 
     # resize
     if r > tr:
@@ -23,7 +24,7 @@ def get_fill_resize_and_crop(src, tgt):    # src 来源的分辨率   tgt base �
         resize_width = int(round(th / h * w))
     else:
         resize_width = tw
-        resize_height = int(round(tw / w * h))    # 根据base分辨率，将目标分辨率resize下来
+        resize_height = int(round(tw / w * h))  # 根据base分辨率，将目标分辨率resize下来
 
     crop_top = int(round((th - resize_height) / 2.0))
     crop_left = int(round((tw - resize_width) / 2.0))
@@ -44,17 +45,18 @@ def get_meshgrid(start, *args):
         num = (stop[0] - start[0], stop[1] - start[1])
     elif len(args) == 2:
         # start is start, args[0] is stop, args[1] is num
-        start = _to_tuple(start)       # 左上角   eg: 12,0
-        stop = _to_tuple(args[0])      # 右下角   eg: 20,32
-        num = _to_tuple(args[1])       # 目标大小  eg: 32,124
+        start = _to_tuple(start)  # 左上角   eg: 12,0
+        stop = _to_tuple(args[0])  # 右下角   eg: 20,32
+        num = _to_tuple(args[1])  # 目标大小  eg: 32,124
     else:
         raise ValueError(f"len(args) should be 0, 1 or 2, but got {len(args)}")
 
-    grid_h = np.linspace(start[0], stop[0], num[0], endpoint=False, dtype=np.float32) # 12-20 中间差值32份   0-32 中间差值124份
+    grid_h = np.linspace(start[0], stop[0], num[0], endpoint=False, dtype=np.float32)  # 12-20 中间差值32份   0-32 中间差值124份
     grid_w = np.linspace(start[1], stop[1], num[1], endpoint=False, dtype=np.float32)
     grid = np.meshgrid(grid_w, grid_h)  # here w goes first
-    grid = np.stack(grid, axis=0)   # [2, W, H]
+    grid = np.stack(grid, axis=0)  # [2, W, H]
     return grid
+
 
 #################################################################################
 #                   Sine/Cosine Positional Embedding Functions                  #
@@ -67,7 +69,7 @@ def get_2d_sincos_pos_embed(embed_dim, start, *args, cls_token=False, extra_toke
     return:
     pos_embed: [grid_size*grid_size, embed_dim] or [1+grid_size*grid_size, embed_dim] (w/ or w/o cls_token)
     """
-    grid = get_meshgrid(start, *args)   # [2, H, w]
+    grid = get_meshgrid(start, *args)  # [2, H, w]
     # grid_h = np.arange(grid_size, dtype=np.float32)
     # grid_w = np.arange(grid_size, dtype=np.float32)
     # grid = np.meshgrid(grid_w, grid_h)  # here w goes first
@@ -87,7 +89,7 @@ def get_2d_sincos_pos_embed_from_grid(embed_dim, grid):
     emb_h = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[0])  # (H*W, D/2)
     emb_w = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[1])  # (H*W, D/2)
 
-    emb = np.concatenate([emb_h, emb_w], axis=1)    # (H*W, D)
+    emb = np.concatenate([emb_h, emb_w], axis=1)  # (H*W, D)
     return emb
 
 
@@ -100,13 +102,13 @@ def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
     assert embed_dim % 2 == 0
     omega = np.arange(embed_dim // 2, dtype=np.float64)
     omega /= embed_dim / 2.
-    omega = 1. / 10000**omega  # (D/2,)
+    omega = 1. / 10000 ** omega  # (D/2,)
 
     pos = pos.reshape(-1)  # (M,)
     out = np.einsum('m,d->md', pos, omega)  # (M, D/2), outer product
 
-    emb_sin = np.sin(out)   # (M, D/2)
-    emb_cos = np.cos(out)   # (M, D/2)
+    emb_sin = np.sin(out)  # (M, D/2)
+    emb_cos = np.cos(out)  # (M, D/2)
 
     emb = np.concatenate([emb_sin, emb_cos], axis=1)  # (M, D)
     return emb
@@ -136,8 +138,8 @@ def get_2d_rotary_pos_embed(embed_dim, start, *args, use_real=True):
     pos_embed: torch.Tensor
         [HW, D/2]
     """
-    grid = get_meshgrid(start, *args)   # [2, H, w]
-    grid = grid.reshape([2, 1, *grid.shape[1:]])   # 返回一个采样矩阵  分辨率与目标分辨率一致
+    grid = get_meshgrid(start, *args)  # [2, H, w]
+    grid = grid.reshape([2, 1, *grid.shape[1:]])  # 返回一个采样矩阵  分辨率与目标分辨率一致
     pos_embed = get_2d_rotary_pos_embed_from_grid(embed_dim, grid, use_real=use_real)
     return pos_embed
 
@@ -150,11 +152,11 @@ def get_2d_rotary_pos_embed_from_grid(embed_dim, grid, use_real=False):
     emb_w = get_1d_rotary_pos_embed(embed_dim // 2, grid[1].reshape(-1), use_real=use_real)  # (H*W, D/4)
 
     if use_real:
-        cos = torch.cat([emb_h[0], emb_w[0]], dim=1)    # (H*W, D/2)
-        sin = torch.cat([emb_h[1], emb_w[1]], dim=1)    # (H*W, D/2)
+        cos = torch.cat([emb_h[0], emb_w[0]], dim=1)  # (H*W, D/2)
+        sin = torch.cat([emb_h[1], emb_w[1]], dim=1)  # (H*W, D/2)
         return cos, sin
     else:
-        emb = torch.cat([emb_h, emb_w], dim=1)    # (H*W, D/2)
+        emb = torch.cat([emb_h, emb_w], dim=1)  # (H*W, D/2)
         return emb
 
 
@@ -191,7 +193,6 @@ def get_1d_rotary_pos_embed(dim: int, pos: Union[np.ndarray, int], theta: float 
         return freqs_cis
 
 
-
 def calc_sizes(rope_img, patch_size, th, tw):
     """ 计算 RoPE 的尺寸. """
     if rope_img == 'extend':
@@ -199,8 +200,8 @@ def calc_sizes(rope_img, patch_size, th, tw):
         sub_args = [(th, tw)]
     elif rope_img.startswith('base'):
         # 基于一个尺寸, 其他尺寸插值获得.
-        base_size = int(rope_img[4:]) // 8 // patch_size            # 基于512作为base，其他根据512差值得到
-        start, stop = get_fill_resize_and_crop((th, tw), base_size)   # 需要在32x32里面 crop的左上角和右下角
+        base_size = int(rope_img[4:]) // 8 // patch_size  # 基于512作为base，其他根据512差值得到
+        start, stop = get_fill_resize_and_crop((th, tw), base_size)  # 需要在32x32里面 crop的左上角和右下角
         sub_args = [start, stop, (th, tw)]
     else:
         raise ValueError(f"Unknown rope_img: {rope_img}")
@@ -218,7 +219,7 @@ def init_image_posemb(rope_img,
     freqs_cis_img = {}
     for reso in resolutions:
         th, tw = reso.height // 8 // patch_size, reso.width // 8 // patch_size
-        sub_args = calc_sizes(rope_img, patch_size, th, tw)      #  [左上角, 右下角, 目标高宽]   需要在32x32里面 crop的左上角和右下角
+        sub_args = calc_sizes(rope_img, patch_size, th, tw)  # [左上角, 右下角, 目标高宽]   需要在32x32里面 crop的左上角和右下角
         freqs_cis_img[str(reso)] = get_2d_rotary_pos_embed(hidden_size // num_heads, *sub_args, use_real=rope_real)
         log_fn(f"    Using image RoPE ({rope_img}) ({'real' if rope_real else 'complex'}): {sub_args} | ({reso}) "
                f"{freqs_cis_img[str(reso)][0].shape if rope_real else freqs_cis_img[str(reso)].shape}")

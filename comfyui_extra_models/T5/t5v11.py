@@ -9,6 +9,7 @@ import torch
 from transformers import T5Tokenizer, T5EncoderModel, T5Config, modeling_utils
 
 from comfy.sd1_clip import token_weights, escape_important, unescape_important, load_embed
+from comfy.component_model.files import get_path_as_dict
 
 
 class T5v11Model(torch.nn.Module):
@@ -30,7 +31,8 @@ class T5v11Model(torch.nn.Module):
                 self.bnb = True
                 model_args["load_in_4bit"] = True
             else:
-                if dtype: model_args["torch_dtype"] = dtype
+                if dtype:
+                    model_args["torch_dtype"] = dtype
                 self.bnb = False
             # second GPU offload hack part 2
             if device.startswith("cuda"):
@@ -38,11 +40,10 @@ class T5v11Model(torch.nn.Module):
             print(f"Loading T5 from '{textmodel_path}'")
             self.transformer = T5EncoderModel.from_pretrained(textmodel_path, **model_args)
         else:
-            if textmodel_json_config is None:
-                with resources.path("comfyui_extra_models.T5", f"t5v11-{textmodel_ver}_config.json") as json_path:
-                    config = T5Config.from_json_file(json_path)
-            else:
-                config = T5Config.from_json_file(textmodel_json_config)
+            textmodel_json_config = get_path_as_dict(textmodel_json_config,
+                                                     f"t5v11-{textmodel_ver}_config.json",
+                                                     "comfyui_extra_models.T5")
+            config = T5Config.from_dict(textmodel_json_config)
             self.num_layers = config.num_hidden_layers
             with modeling_utils.no_init_weights():
                 self.transformer = T5EncoderModel(config)
