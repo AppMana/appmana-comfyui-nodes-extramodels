@@ -19,11 +19,23 @@ NODE_CLASS_MAPPINGS.update(PixArt_Nodes)
 from .T5.nodes import NODE_CLASS_MAPPINGS as T5_Nodes
 
 NODE_CLASS_MAPPINGS.update(T5_Nodes)
+# HYDiT
+from .HunYuanDiT.nodes import NODE_CLASS_MAPPINGS as HunYuanDiT_Nodes
+
+NODE_CLASS_MAPPINGS.update(HunYuanDiT_Nodes)
 
 # VAE
 from .VAE.nodes import NODE_CLASS_MAPPINGS as VAE_Nodes
 
 NODE_CLASS_MAPPINGS.update(VAE_Nodes)
+
+# MiaoBi
+from .MiaoBi.nodes import NODE_CLASS_MAPPINGS as MiaoBi_Nodes
+
+NODE_CLASS_MAPPINGS.update(MiaoBi_Nodes)
+
+NODE_DISPLAY_NAME_MAPPINGS = {k: v.TITLE for k, v in NODE_CLASS_MAPPINGS.items()}
+__all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']
 
 NODE_DISPLAY_NAME_MAPPINGS = {k: v.TITLE for k, v in NODE_CLASS_MAPPINGS.items()}
 __all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']

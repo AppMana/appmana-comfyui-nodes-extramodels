@@ -77,6 +77,29 @@ Everything else can be the same the same as in the example above.
 
 
 
+## HunYuan DiT
+
+WIP implementation of [HunYuan DiT by Tencent](https://github.com/Tencent/HunyuanDiT)
+
+The initial work on this was done by [chaojie](https://github.com/chaojie) in [this PR](https://github.com/city96/ComfyUI_ExtraModels/pull/37).
+
+Instructions:
+- Download the [first text encoder from here](https://huggingface.co/Tencent-Hunyuan/HunyuanDiT/blob/main/t2i/clip_text_encoder/pytorch_model.bin) and place it in `ComfyUI/models/clip` - rename to "chinese-roberta-wwm-ext-large.bin"
+- Download the [second text encoder from here](https://huggingface.co/Tencent-Hunyuan/HunyuanDiT/blob/main/t2i/mt5/pytorch_model.bin) and place it in `ComfyUI/models/t5` - rename it to "mT5-xl.bin"
+- Download the [model file from here](https://huggingface.co/Tencent-Hunyuan/HunyuanDiT/blob/main/t2i/model/pytorch_model_module.pt) and place it in `ComfyUI/checkpoints` - rename it to "HunYuanDiT.pt"
+- Download/use any SDXL VAE, for example [this one](https://huggingface.co/madebyollin/sdxl-vae-fp16-fix)
+
+You may also try the following alternate model files for faster loading speed/smaller file size:
+- converted [second text encoder](https://huggingface.co/city96/mt5-xl-encoder-fp16/blob/main/model.safetensors) - rename to `mT5-xl-encoder-fp16.safetensors` and placed in `ComfyUI/models/t5`
+
+You can use the "simple" text encode node to only use one prompt, or you can use the regular one to pass different text to CLIP/T5.
+
+[Sample Workflow](https://github.com/city96/ComfyUI_ExtraModels/files/15444231/HyDiTV1.json)
+
+![image](https://github.com/city96/ComfyUI_ExtraModels/assets/125218114/7a9d6e34-d3f4-4f67-a17f-4f2d6795e54e)
+
+
+
 ## DiT
 
 [Original Repo](https://github.com/facebookresearch/DiT)
@@ -120,6 +143,8 @@ For faster loading/smaller file sizes, you may pick one of the following alterna
 - [FP16 converted version](https://huggingface.co/theunlikely/t5-v1_1-xxl-fp16/tree/main) - Same layout as the original, download both safetensor files as well as the `*.index.json` and `config.json` files.
 - [BF16 converter version](https://huggingface.co/city96/t5-v1_1-xxl-encoder-bf16/tree/main) - Merged into a single safetensor, only `model.safetensors` (+`config.json` for folder mode) are reqired.
 
+To move T5 to a different drive/folder, do the same as you would when moving checkpoints, but add `    t5: t5` to `extra_model_paths.yaml` and create a directory called "t5" in the alternate path specified in the `base_path` variable.
+
 ### Usage
 
 Loaded onto the CPU, it'll use about 22GBs of system RAM. Depending on which weights you use, it might use slightly more during loading.
@@ -135,9 +160,46 @@ On windows, you may need a newer version of bitsandbytes for 4bit. Try `python -
 
 
 
+## MiaoBi
+
+### Original from: 
+
+- Author: Github [ShineChen1024](https://github.com/ShineChen1024) | Hugging Face [ShineChen1024](https://huggingface.co/ShineChen1024)
+- https://github.com/ShineChen1024/MiaoBi
+- https://huggingface.co/ShineChen1024/MiaoBi
+
+### Instructions
+- Download the [clip model](https://huggingface.co/ShineChen1024/MiaoBi/blob/main/miaobi_beta0.9/text_encoder/model.safetensors) and rename it to "MiaoBi_CLIP.safetensors" or any you like, then place it in `ComfyUI/models/clip`.
+- Download the [unet model](https://huggingface.co/ShineChen1024/MiaoBi/blob/main/miaobi_beta0.9/unet/diffusion_pytorch_model.safetensors) and rename it to "MiaoBi.safetensors", then place it in `ComfyUI/models/unet`.
+- Alternatively, clone/download the entire huggingface repo to `ComfyUI/models/diffusers` and use the MiaoBi diffusers loader.
+
+这是妙笔的测试版本。妙笔，一个中文文生图模型，与经典的stable-diffusion 1.5版本拥有一致的结构，兼容现有的lora，controlnet，T2I-Adapter等主流插件及其权重。
+
+This is the beta version of MiaoBi, a chinese text-to-image model, following the classical structure of sd-v1.5, compatible with existing mainstream plugins such as Lora, Controlnet, T2I Adapter, etc.
+
+Example Prompts:
+- 一只精致的陶瓷猫咪雕像，全身绘有精美的传统花纹，眼睛仿佛会发光。
+- 动漫风格的风景画，有山脉、湖泊，也有繁华的小镇子，色彩鲜艳，光影效果明显。
+- 极具真实感的复杂农村的老人肖像，黑白。
+- 红烧狮子头
+- 车水马龙的上海街道，春节，舞龙舞狮。
+- 枯藤老树昏鸦，小桥流水人家。水墨画。
+
+[Example Workflow](https://github.com/city96/ComfyUI_ExtraModels/files/15389380/MiaoBiV1.json)
+
+[Example Workflow (diffusers)](https://github.com/city96/ComfyUI_ExtraModels/files/15389381/MiaoBiV1D.json)
+
+![MiaoBi](https://github.com/city96/ComfyUI_ExtraModels/assets/125218114/d9e4ab7d-f61b-407f-b7dd-af5859627d0e)
+
+
+
 ## VAE
 
-A few custom VAE models are supported. The option to select a different dtype when loading is also possible, which can be useful for testing/comparisons.
+A few custom VAE models are supported. The option to select a different dtype when loading is also possible, which can be useful for testing/comparisons. You can load the models listed below using the "ExtraVAELoader" node.
+
+**Models like PixArt/DiT do NOT need a special VAE. Unless mentioned, use one of the following as you would with any other model:**
+- [VAE for SD1.X, DiT and PixArt alpha](https://huggingface.co/stabilityai/sd-vae-ft-mse-original/blob/main/vae-ft-mse-840000-ema-pruned.safetensors).
+- [VAE for SDXL and PixArt sigma](https://huggingface.co/madebyollin/sdxl-vae-fp16-fix/blob/main/diffusion_pytorch_model.safetensors)
 
 ### Consistency Decoder
 
