@@ -1,9 +1,11 @@
+from typing import Tuple, Union, Optional
+
 import torch
 import torch.nn as nn
-from typing import Tuple, Union, Optional
 
 try:
     import flash_attn
+
     if hasattr(flash_attn, '__version__') and int(flash_attn.__version__[0]) == 2:
         from flash_attn.flash_attn_interface import flash_attn_kvpacked_func
         from flash_attn.modules.mha import FlashSelfAttention, FlashCrossAttention
@@ -39,19 +41,23 @@ def reshape_for_broadcast(freqs_cis: Union[torch.Tensor, Tuple[torch.Tensor]], x
     if isinstance(freqs_cis, tuple):
         # freqs_cis: (cos, sin) in real space
         if head_first:
-            assert freqs_cis[0].shape == (x.shape[-2], x.shape[-1]), f'freqs_cis shape {freqs_cis[0].shape} does not match x shape {x.shape}'
+            assert freqs_cis[0].shape == (
+            x.shape[-2], x.shape[-1]), f'freqs_cis shape {freqs_cis[0].shape} does not match x shape {x.shape}'
             shape = [d if i == ndim - 2 or i == ndim - 1 else 1 for i, d in enumerate(x.shape)]
         else:
-            assert freqs_cis[0].shape == (x.shape[1], x.shape[-1]), f'freqs_cis shape {freqs_cis[0].shape} does not match x shape {x.shape}'
+            assert freqs_cis[0].shape == (
+            x.shape[1], x.shape[-1]), f'freqs_cis shape {freqs_cis[0].shape} does not match x shape {x.shape}'
             shape = [d if i == 1 or i == ndim - 1 else 1 for i, d in enumerate(x.shape)]
         return freqs_cis[0].view(*shape), freqs_cis[1].view(*shape)
     else:
         # freqs_cis: values in complex space
         if head_first:
-            assert freqs_cis.shape == (x.shape[-2], x.shape[-1]), f'freqs_cis shape {freqs_cis.shape} does not match x shape {x.shape}'
+            assert freqs_cis.shape == (
+            x.shape[-2], x.shape[-1]), f'freqs_cis shape {freqs_cis.shape} does not match x shape {x.shape}'
             shape = [d if i == ndim - 2 or i == ndim - 1 else 1 for i, d in enumerate(x.shape)]
         else:
-            assert freqs_cis.shape == (x.shape[1], x.shape[-1]), f'freqs_cis shape {freqs_cis.shape} does not match x shape {x.shape}'
+            assert freqs_cis.shape == (
+            x.shape[1], x.shape[-1]), f'freqs_cis shape {freqs_cis.shape} does not match x shape {x.shape}'
             shape = [d if i == 1 or i == ndim - 1 else 1 for i, d in enumerate(x.shape)]
         return freqs_cis.view(*shape)
 
@@ -87,14 +93,14 @@ def apply_rotary_emb(
     """
     xk_out = None
     if isinstance(freqs_cis, tuple):
-        cos, sin = reshape_for_broadcast(freqs_cis, xq, head_first)    # [S, D]
+        cos, sin = reshape_for_broadcast(freqs_cis, xq, head_first)  # [S, D]
         cos, sin = cos.to(xq.device), sin.to(xq.device)
         xq_out = (xq.float() * cos + rotate_half(xq.float()) * sin).type_as(xq)
         if xk is not None:
             xk_out = (xk.float() * cos + rotate_half(xk.float()) * sin).type_as(xk)
     else:
         xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))  # [B, S, H, D//2]
-        freqs_cis = reshape_for_broadcast(freqs_cis, xq_, head_first).to(xq.device)   # [S, D//2] --> [1, S, 1, D//2]
+        freqs_cis = reshape_for_broadcast(freqs_cis, xq_, head_first).to(xq.device)  # [S, D//2] --> [1, S, 1, D//2]
         xq_out = torch.view_as_real(xq_ * freqs_cis).flatten(3).type_as(xq)
         if xk is not None:
             xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))  # [B, S, H, D//2]
@@ -107,6 +113,7 @@ class FlashSelfMHAModified(nn.Module):
     """
     Use QK Normalization.
     """
+
     def __init__(self,
                  dim,
                  num_heads,
@@ -147,8 +154,8 @@ class FlashSelfMHAModified(nn.Module):
 
         qkv = self.Wqkv(x)
         qkv = qkv.view(b, s, 3, self.num_heads, self.head_dim)  # [b, s, 3, h, d]
-        q, k, v = qkv.unbind(dim=2) # [b, s, h, d]
-        q = self.q_norm(q).half()   # [b, s, h, d]
+        q, k, v = qkv.unbind(dim=2)  # [b, s, h, d]
+        q = self.q_norm(q).half()  # [b, s, h, d]
         k = self.k_norm(k).half()
 
         # Apply RoPE if needed
@@ -157,7 +164,7 @@ class FlashSelfMHAModified(nn.Module):
             assert qq.shape == q.shape and kk.shape == k.shape, f'qq: {qq.shape}, q: {q.shape}, kk: {kk.shape}, k: {k.shape}'
             q, k = qq, kk
 
-        qkv = torch.stack([q, k, v], dim=2)     # [b, s, 3, h, d]
+        qkv = torch.stack([q, k, v], dim=2)  # [b, s, 3, h, d]
         context = self.inner_attn(qkv)
         out = self.out_proj(context.view(b, s, d))
         out = self.proj_drop(out)
@@ -171,6 +178,7 @@ class FlashCrossMHAModified(nn.Module):
     """
     Use QK Normalization.
     """
+
     def __init__(self,
                  qdim,
                  kdim,
@@ -216,23 +224,23 @@ class FlashCrossMHAModified(nn.Module):
         freqs_cis_img: torch.Tensor
             (batch, hidden_dim // num_heads), RoPE for image
         """
-        b, s1, _ = x.shape     # [b, s1, D]
-        _, s2, _ = y.shape     # [b, s2, 1024]
+        b, s1, _ = x.shape  # [b, s1, D]
+        _, s2, _ = y.shape  # [b, s2, 1024]
 
-        q = self.q_proj(x).view(b, s1, self.num_heads, self.head_dim)       # [b, s1, h, d]
+        q = self.q_proj(x).view(b, s1, self.num_heads, self.head_dim)  # [b, s1, h, d]
         kv = self.kv_proj(y).view(b, s2, 2, self.num_heads, self.head_dim)  # [b, s2, 2, h, d]
-        k, v = kv.unbind(dim=2)                 # [b, s2, h, d]
-        q = self.q_norm(q).half()               # [b, s1, h, d]
-        k = self.k_norm(k).half()               # [b, s2, h, d]
+        k, v = kv.unbind(dim=2)  # [b, s2, h, d]
+        q = self.q_norm(q).half()  # [b, s1, h, d]
+        k = self.k_norm(k).half()  # [b, s2, h, d]
 
         # Apply RoPE if needed
         if freqs_cis_img is not None:
             qq, _ = apply_rotary_emb(q, None, freqs_cis_img)
             assert qq.shape == q.shape, f'qq: {qq.shape}, q: {q.shape}'
-            q = qq                              # [b, s1, h, d]
-        kv = torch.stack([k, v], dim=2)         # [b, s1, 2, h, d]
-        context = self.inner_attn(q, kv)        # [b, s1, h, d]
-        context = context.view(b, s1, -1)       # [b, s1, D]
+            q = qq  # [b, s1, h, d]
+        kv = torch.stack([k, v], dim=2)  # [b, s1, 2, h, d]
+        context = self.inner_attn(q, kv)  # [b, s1, h, d]
+        context = context.view(b, s1, -1)  # [b, s1, D]
 
         out = self.out_proj(context)
         out = self.proj_drop(out)
@@ -246,6 +254,7 @@ class CrossAttention(nn.Module):
     """
     Use QK Normalization.
     """
+
     def __init__(self,
                  qdim,
                  kdim,
@@ -289,12 +298,12 @@ class CrossAttention(nn.Module):
         freqs_cis_img: torch.Tensor
             (batch, hidden_dim // 2), RoPE for image
         """
-        b, s1, c = x.shape     # [b, s1, D]
-        _, s2, c = y.shape     # [b, s2, 1024]
+        b, s1, c = x.shape  # [b, s1, D]
+        _, s2, c = y.shape  # [b, s2, 1024]
 
-        q = self.q_proj(x).view(b, s1, self.num_heads, self.head_dim)   # [b, s1, h, d]
-        kv = self.kv_proj(y).view(b, s2, 2, self.num_heads, self.head_dim)    # [b, s2, 2, h, d]
-        k, v = kv.unbind(dim=2) # [b, s, h, d]
+        q = self.q_proj(x).view(b, s1, self.num_heads, self.head_dim)  # [b, s1, h, d]
+        kv = self.kv_proj(y).view(b, s2, 2, self.num_heads, self.head_dim)  # [b, s2, 2, h, d]
+        k, v = kv.unbind(dim=2)  # [b, s, h, d]
         q = self.q_norm(q)
         k = self.k_norm(k)
 
@@ -305,13 +314,13 @@ class CrossAttention(nn.Module):
             q = qq
 
         q = q * self.scale
-        q = q.transpose(-2, -3).contiguous()        # q ->  B, L1, H, C - B, H, L1, C
-        k = k.permute(0, 2, 3, 1).contiguous()      # k ->  B, L2, H, C - B, H, C, L2
-        attn = q @ k                                # attn -> B, H, L1, L2
-        attn = attn.softmax(dim=-1)                 # attn -> B, H, L1, L2
+        q = q.transpose(-2, -3).contiguous()  # q ->  B, L1, H, C - B, H, L1, C
+        k = k.permute(0, 2, 3, 1).contiguous()  # k ->  B, L2, H, C - B, H, C, L2
+        attn = q @ k  # attn -> B, H, L1, L2
+        attn = attn.softmax(dim=-1)  # attn -> B, H, L1, L2
         attn = self.attn_drop(attn)
-        x = attn @ v.transpose(-2, -3)              # v -> B, L2, H, C - B, H, L2, C    x-> B, H, L1, C
-        context = x.transpose(1, 2)                 # context -> B, H, L1, C - B, L1, H, C
+        x = attn @ v.transpose(-2, -3)  # v -> B, L2, H, C - B, H, L2, C    x-> B, H, L1, C
+        context = x.transpose(1, 2)  # context -> B, H, L1, C - B, L1, H, C
 
         context = context.contiguous().view(b, s1, -1)
 
@@ -327,6 +336,7 @@ class Attention(nn.Module):
     """
     We rename some layer names to align with flash attention
     """
+
     def __init__(self, dim, num_heads, qkv_bias=True, qk_norm=False, attn_drop=0., proj_drop=0.,
                  norm_layer=nn.LayerNorm,
                  ):
@@ -350,10 +360,10 @@ class Attention(nn.Module):
 
     def forward(self, x, freqs_cis_img=None):
         B, N, C = x.shape
-        qkv = self.Wqkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)   # [3, b, h, s, d]
-        q, k, v = qkv.unbind(0)     # [b, h, s, d]
-        q = self.q_norm(q)          # [b, h, s, d]
-        k = self.k_norm(k)          # [b, h, s, d]
+        qkv = self.Wqkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)  # [3, b, h, s, d]
+        q, k, v = qkv.unbind(0)  # [b, h, s, d]
+        q = self.q_norm(q)  # [b, h, s, d]
+        k = self.k_norm(k)  # [b, h, s, d]
 
         # Apply RoPE if needed
         if freqs_cis_img is not None:
@@ -363,12 +373,12 @@ class Attention(nn.Module):
             q, k = qq, kk
 
         q = q * self.scale
-        attn = q @ k.transpose(-2, -1)              # [b, h, s, d] @ [b, h, d, s]
-        attn = attn.softmax(dim=-1)                 # [b, h, s, s]
+        attn = q @ k.transpose(-2, -1)  # [b, h, s, d] @ [b, h, d, s]
+        attn = attn.softmax(dim=-1)  # [b, h, s, s]
         attn = self.attn_drop(attn)
-        x = attn @ v                                # [b, h, s, d]
+        x = attn @ v  # [b, h, s, d]
 
-        x = x.transpose(1, 2).reshape(B, N, C)      # [b, s, h, d]
+        x = x.transpose(1, 2).reshape(B, N, C)  # [b, s, h, d]
         x = self.out_proj(x)
         x = self.proj_drop(x)
 

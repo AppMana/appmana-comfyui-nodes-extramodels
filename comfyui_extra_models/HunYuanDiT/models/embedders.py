@@ -1,8 +1,8 @@
 import math
+
 import torch
 import torch.nn as nn
 from einops import repeat
-
 from timm.models.layers import to_2tuple
 
 
@@ -19,6 +19,7 @@ class PatchEmbed(nn.Module):
 
     Remove the _assert function in forward function to be compatible with multi-resolution images.
     """
+
     def __init__(
             self,
             img_size=224,
@@ -78,7 +79,7 @@ def timestep_embedding(t, dim, max_period=10000, repeat_only=False):
             -math.log(max_period)
             * torch.arange(start=0, end=half, dtype=torch.float32)
             / half
-        ).to(device=t.device)   # size: [dim/2], 一个指数衰减的曲线
+        ).to(device=t.device)  # size: [dim/2], 一个指数衰减的曲线
         args = t[:, None].float() * freqs[None]
         embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
         if dim % 2:
@@ -94,6 +95,7 @@ class TimestepEmbedder(nn.Module):
     """
     Embeds scalar timesteps into vector representations.
     """
+
     def __init__(self, hidden_size, frequency_embedding_size=256, out_size=None):
         super().__init__()
         if out_size is None:

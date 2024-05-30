@@ -59,6 +59,7 @@ class GroupNorm32(nn.GroupNorm):
         y = super().forward(x).to(x.dtype)
         return y
 
+
 def normalization(channels, dtype=None):
     """
     Make a standard normalization layer.

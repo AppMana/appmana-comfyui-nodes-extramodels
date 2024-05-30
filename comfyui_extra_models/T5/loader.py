@@ -63,7 +63,7 @@ class EXM_T5v11:
         )
 
     def clone(self):
-        n = T5(no_init=True)
+        n = EXM_T5v11(no_init=True)
         n.patcher = self.patcher.clone()
         n.cond_stage_model = self.cond_stage_model
         n.tokenizer = self.tokenizer

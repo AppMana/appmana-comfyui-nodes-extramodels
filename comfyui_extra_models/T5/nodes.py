@@ -1,6 +1,5 @@
 import torch
 
-from comfy.cmd import folder_paths
 from comfy.model_downloader import get_filename_list_with_downloadable, get_or_download
 from comfy.model_downloader_types import HuggingFile
 from .loader import load_t5
