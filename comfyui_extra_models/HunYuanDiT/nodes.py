@@ -1,7 +1,7 @@
 from copy import deepcopy
 
 from comfy.model_downloader import get_or_download, get_filename_list_with_downloadable, add_known_models, \
-    KNOWN_CHECKPOINTS, KNOWN_CLIP_MODELS
+    KNOWN_CHECKPOINTS, KNOWN_CLIP_MODELS, KNOWN_HUGGINGFACE_MODEL_REPOS
 from comfy.model_downloader_types import HuggingFile
 from .conf import hydit_conf
 from .loader import load_hydit
@@ -24,6 +24,8 @@ KNOWN_HUNYUANDIT_CHECKPOINTS = [
 
 add_known_models("checkpoints", KNOWN_CHECKPOINTS, *KNOWN_HUNYUANDIT_CHECKPOINTS)
 add_known_models("clip", KNOWN_CLIP_MODELS, *KNOWN_HUNYUANDIT_CHECKPOINTS)
+
+KNOWN_HUGGINGFACE_MODEL_REPOS.add("Tencent-Hunyuan/HunyuanDiT")
 
 
 class HYDiTCheckpointLoader:

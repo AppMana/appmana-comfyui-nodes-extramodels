@@ -110,7 +110,7 @@ class EXM_HyDiT_Tenc_Temp:
             )
             tokenizer_path = get_package_as_path("comfyui_extra_models.HunYuanDiT.tokenizer")
 
-        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, legacy=False)
         self.patcher = comfy.model_patcher.ModelPatcher(
             self.cond_stage_model,
             load_device=self.load_device,
