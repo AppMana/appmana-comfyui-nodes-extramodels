@@ -13,10 +13,10 @@ class EXM_T5v11:
             return
 
         if device == "auto":
-            size = 0
+            size = model_management.text_encoder_dtype().itemsize * 11307.38 * 1e6
             self.load_device = model_management.text_encoder_device()
             self.offload_device = model_management.text_encoder_offload_device()
-            self.init_device = "cpu"
+            self.init_device = model_management.text_encoder_offload_device()
         elif dtype == "bnb8bit":
             # BNB doesn't support size enum
             size = 12.4 * (1024 ** 3)
@@ -50,7 +50,7 @@ class EXM_T5v11:
         self.cond_stage_model = T5v11Model(
             textmodel_ver=textmodel_ver,
             textmodel_path=textmodel_path,
-            device=device,
+            device=self.init_device,
             dtype=dtype,
         )
         self.tokenizer = T5v11Tokenizer(embedding_directory=embedding_directory)
@@ -58,7 +58,7 @@ class EXM_T5v11:
             self.cond_stage_model,
             load_device=self.load_device,
             offload_device=self.offload_device,
-            current_device=self.load_device,
+            current_device=self.init_device,
             size=size,
         )
 
