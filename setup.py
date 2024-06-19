@@ -11,10 +11,11 @@ if system() != 'Windows' and ' ' in setup_dir:
 our_requirements = open("requirements.txt").readlines()
 our_requirements = [req.replace("{root:uri}", f"file://{setup_dir}") for req in our_requirements]
 
+packages = find_packages()
 setup(
     name="comfyui_extra_models",
     version="0.0.1",
-    packages=find_packages(),
+    packages=packages,
     install_requires=our_requirements,
     author='',
     author_email='',
@@ -26,6 +27,6 @@ setup(
         ],
     },
     package_data={
-        'comfyui_extra_models': ['**/*.json', '**/spiece.model']
+        package_or_module: ['*.json', 'spiece.model'] for package_or_module in packages
     },
 )
