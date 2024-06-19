@@ -7,19 +7,19 @@ from .conf import hydit_conf
 from .loader import load_hydit
 
 KNOWN_HUNYUANDIT_CLIP_MODELS = [
-    HuggingFile("Tencent-Hunyuan/HunyuanDiT",
+    HuggingFile("Tencent-Hunyuan/HunyuanDiT-v1.1",
                 "t2i/clip_text_encoder/pytorch_model.bin",
                 save_with_filename="chinese-roberta-wwm-ext-large.bin")
 ]
 
 KNOWN_HUNYUANDIT_T5_MODELS = [
-    HuggingFile("Tencent-Hunyuan/HunyuanDiT",
+    HuggingFile("Tencent-Hunyuan/HunyuanDiT-v1.1",
                 "t2i/mt5/pytorch_model.bin",
                 save_with_filename="mT5-xl.bin")
 ]
 
 KNOWN_HUNYUANDIT_CHECKPOINTS = [
-    HuggingFile("Tencent-Hunyuan/HunyuanDiT", "t2i/model/pytorch_model_module.pt", save_with_filename="HunYuanDiT.pt")
+    HuggingFile("Tencent-Hunyuan/HunyuanDiT-v1.1", "t2i/model/pytorch_model_module.pt", save_with_filename="HunYuanDiT.pt")
 ]
 
 add_known_models("checkpoints", KNOWN_CHECKPOINTS, *KNOWN_HUNYUANDIT_CHECKPOINTS)
@@ -132,7 +132,6 @@ class HYDiTTextEncode:
         T5.load_model()
         t5_pre = T5.tokenizer(
             text_t5,
-            text,
             max_length=T5.cond_stage_model.max_length,
             padding='max_length',
             truncation=True,

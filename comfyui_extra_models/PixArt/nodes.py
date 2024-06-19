@@ -1,8 +1,10 @@
+import copy
+
 from comfy import utils
-from comfy.cmd import folder_paths
 from comfy.model_downloader import add_known_models, get_or_download, get_filename_list_with_downloadable, \
-    KNOWN_CHECKPOINTS
+    KNOWN_CHECKPOINTS, KNOWN_LORAS
 from comfy.model_downloader_types import HuggingFile
+from comfy.sd3_clip import SD3Tokenizer, SD3ClipModel
 from .conf import pixart_conf, pixart_res
 from .loader import load_pixart
 from .lora import load_pixart_lora
@@ -74,7 +76,7 @@ class PixArtLoraLoader:
         return {
             "required": {
                 "model": ("MODEL",),
-                "lora_name": (folder_paths.get_filename_list("loras"),),
+                "lora_name": (get_filename_list_with_downloadable("loras", KNOWN_LORAS),),
                 "strength": ("FLOAT", {"default": 1.0, "min": -20.0, "max": 20.0, "step": 0.01}),
             }
         }
@@ -88,7 +90,7 @@ class PixArtLoraLoader:
         if strength == 0:
             return (model)
 
-        lora_path = folder_paths.get_full_path("loras", lora_name)
+        lora_path = get_or_download("loras", lora_name, KNOWN_LORAS)
         lora = None
         if self.loaded_lora is not None:
             if self.loaded_lora[0] == lora_path:
@@ -157,10 +159,134 @@ class PixArtControlNetCond:
         return (cond,)
 
 
+class PixArtCheckpointLoaderSimple(PixArtCheckpointLoader):
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "ckpt_name": (get_filename_list_with_downloadable("checkpoints", PIXART_CHECKPOINTS),),
+            }
+        }
+
+    TITLE = "PixArt Checkpoint Loader (auto)"
+
+    def load_checkpoint(self, ckpt_name, **kwargs):
+        ckpt_path = get_or_download("checkpoints", ckpt_name, PIXART_CHECKPOINTS)
+        model = load_pixart(model_path=ckpt_path)
+        return (model,)
+
+
+class PixArtT5TextEncode:
+    """
+    Reference code, mostly to verify compatibility.
+     Once everything works, this should instead inherit from the
+     T5 text encode node and simply add the extra conds (res/ar).
+    """
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "text": ("STRING", {"multiline": True}),
+                "T5": ("T5",),
+            }
+        }
+
+    RETURN_TYPES = ("CONDITIONING",)
+    FUNCTION = "encode"
+    CATEGORY = "ExtraModels/PixArt"
+    TITLE = "PixArt T5 Text Encode [Reference]"
+
+    def mask_feature(self, emb, mask):
+        if emb.shape[0] == 1:
+            keep_index = mask.sum().item()
+            return emb[:, :, :keep_index, :], keep_index
+        else:
+            masked_feature = emb * mask[:, None, :, None]
+            return masked_feature, emb.shape[2]
+
+    def encode(self, text, T5):
+        text = text.lower().strip()
+        tokenizer_out = T5.tokenizer.tokenizer(
+            text,
+            max_length=120,
+            padding='max_length',
+            truncation=True,
+            return_attention_mask=True,
+            add_special_tokens=True,
+            return_tensors='pt'
+        )
+        tokens = tokenizer_out["input_ids"]
+        mask = tokenizer_out["attention_mask"]
+        embs = T5.cond_stage_model.transformer(
+            input_ids=tokens.to(T5.load_device),
+            attention_mask=mask.to(T5.load_device),
+        )['last_hidden_state'].float()[:, None]
+        masked_embs, keep_index = self.mask_feature(
+            embs.detach().to("cpu"),
+            mask.detach().to("cpu")
+        )
+        masked_embs = masked_embs.squeeze(0)  # match CLIP/internal
+        print("Encoded T5:", masked_embs.shape)
+        return ([[masked_embs, {}]],)
+
+
+class PixArtT5FromSD3CLIP:
+    """
+    Split the T5 text encoder away from SD3
+    """
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "sd3_clip": ("CLIP",),
+                "padding": ("INT", {"default": 1, "min": 1, "max": 300}),
+            }
+        }
+
+    RETURN_TYPES = ("CLIP",)
+    RETURN_NAMES = ("t5",)
+    FUNCTION = "split"
+    CATEGORY = "ExtraModels/PixArt"
+    TITLE = "PixArt T5 from SD3 CLIP"
+
+    def split(self, sd3_clip, padding):
+        clip = sd3_clip.clone()
+        assert clip.cond_stage_model.t5xxl is not None, "CLIP must have T5 loaded!"
+
+        # remove transformer
+        transformer = clip.cond_stage_model.t5xxl.transformer
+        clip.cond_stage_model.t5xxl.transformer = None
+
+        # clone object
+        tmp = SD3ClipModel(clip_l=False, clip_g=False, t5=False)
+        tmp.t5xxl = copy.deepcopy(clip.cond_stage_model.t5xxl)
+        # put transformer back
+        clip.cond_stage_model.t5xxl.transformer = transformer
+        tmp.t5xxl.transformer = transformer
+
+        # override special tokens
+        tmp.t5xxl.special_tokens = copy.deepcopy(clip.cond_stage_model.t5xxl.special_tokens)
+        tmp.t5xxl.special_tokens.pop("end")  # make sure empty tokens match
+
+        # tokenizer
+        tok = SD3Tokenizer()
+        tok.t5xxl.min_length = padding
+
+        clip.cond_stage_model = tmp
+        clip.tokenizer = tok
+
+        return (clip,)
+
+
 NODE_CLASS_MAPPINGS = {
     "PixArtCheckpointLoader": PixArtCheckpointLoader,
+    "PixArtCheckpointLoaderSimple": PixArtCheckpointLoaderSimple,
     "PixArtResolutionSelect": PixArtResolutionSelect,
     "PixArtLoraLoader": PixArtLoraLoader,
+    "PixArtT5TextEncode": PixArtT5TextEncode,
     "PixArtResolutionCond": PixArtResolutionCond,
     "PixArtControlNetCond": PixArtControlNetCond,
+    "PixArtT5FromSD3CLIP": PixArtT5FromSD3CLIP,
 }

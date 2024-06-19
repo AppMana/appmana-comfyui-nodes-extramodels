@@ -2,10 +2,8 @@ import torch
 from tqdm import tqdm
 
 import comfy.conds
-import comfy.conds
 import comfy.latent_formats
 import comfy.model_base
-import comfy.model_patcher
 import comfy.model_patcher
 import comfy.supported_models_base
 import comfy.utils
@@ -83,6 +81,5 @@ def load_hydit(model_path, model_conf):
         load_device=load_device,
         offload_device=offload_device,
         current_device="cpu",
-        size=6 * (1024 ** 3),
     )
     return model_patcher
