@@ -1,203 +1,166 @@
-import os
-import json
-import torch
-import folder_paths
-
 from comfy import utils
+from comfy.cmd import folder_paths
+from comfy.model_downloader import add_known_models, get_or_download, get_filename_list_with_downloadable, \
+    KNOWN_CHECKPOINTS
+from comfy.model_downloader_types import HuggingFile
 from .conf import pixart_conf, pixart_res
-from .lora import load_pixart_lora
 from .loader import load_pixart
+from .lora import load_pixart_lora
+
+PIXART_CHECKPOINTS = [HuggingFile("PixArt-alpha/PixArt-alpha", "PixArt-XL-2-1024-MS.pth"),
+                      HuggingFile("PixArt-alpha/PixArt-Sigma", 'PixArt-Sigma-XL-2-1024-MS.pth'),
+                      HuggingFile("PixArt-alpha/PixArt-Sigma", 'PixArt-Sigma-XL-2-2K-MS.pth'),
+                      ]
+
+add_known_models("checkpoints", KNOWN_CHECKPOINTS,
+                 *PIXART_CHECKPOINTS
+                 )
+
 
 class PixArtCheckpointLoader:
-	@classmethod
-	def INPUT_TYPES(s):
-		return {
-			"required": {
-				"ckpt_name": (folder_paths.get_filename_list("checkpoints"),),
-				"model": (list(pixart_conf.keys()),),
-			}
-		}
-	RETURN_TYPES = ("MODEL",)
-	RETURN_NAMES = ("model",)
-	FUNCTION = "load_checkpoint"
-	CATEGORY = "ExtraModels/PixArt"
-	TITLE = "PixArt Checkpoint Loader"
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "ckpt_name": (get_filename_list_with_downloadable("checkpoints", PIXART_CHECKPOINTS),),
+                "model": (list(pixart_conf.keys()),),
+            }
+        }
 
-	def load_checkpoint(self, ckpt_name, model):
-		ckpt_path = folder_paths.get_full_path("checkpoints", ckpt_name)
-		model_conf = pixart_conf[model]
-		model = load_pixart(
-			model_path = ckpt_path,
-			model_conf = model_conf,
-		)
-		return (model,)
+    RETURN_TYPES = ("MODEL",)
+    RETURN_NAMES = ("model",)
+    FUNCTION = "load_checkpoint"
+    CATEGORY = "ExtraModels/PixArt"
+    TITLE = "PixArt Checkpoint Loader"
+
+    def load_checkpoint(self, ckpt_name, model):
+        ckpt_path = get_or_download("checkpoints", ckpt_name, PIXART_CHECKPOINTS)
+        model_conf = pixart_conf[model]
+        model = load_pixart(
+            model_path=ckpt_path,
+            model_conf=model_conf,
+        )
+        return (model,)
+
 
 class PixArtResolutionSelect():
-	@classmethod
-	def INPUT_TYPES(s):
-		return {
-			"required": {
-				"model": (list(pixart_res.keys()),),
-				# keys are the same for both
-				"ratio": (list(pixart_res["PixArtMS_XL_2"].keys()),{"default":"1.00"}),
-			}
-		}
-	RETURN_TYPES = ("INT","INT")
-	RETURN_NAMES = ("width","height")
-	FUNCTION = "get_res"
-	CATEGORY = "ExtraModels/PixArt"
-	TITLE = "PixArt Resolution Select"
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "model": (list(pixart_res.keys()),),
+                # keys are the same for both
+                "ratio": (list(pixart_res["PixArtMS_XL_2"].keys()), {"default": "1.00"}),
+            }
+        }
 
-	def get_res(self, model, ratio):
-		width, height = pixart_res[model][ratio]
-		return (width,height)
+    RETURN_TYPES = ("INT", "INT")
+    RETURN_NAMES = ("width", "height")
+    FUNCTION = "get_res"
+    CATEGORY = "ExtraModels/PixArt"
+    TITLE = "PixArt Resolution Select"
+
+    def get_res(self, model, ratio):
+        width, height = pixart_res[model][ratio]
+        return (width, height)
+
 
 class PixArtLoraLoader:
-	def __init__(self):
-		self.loaded_lora = None
+    def __init__(self):
+        self.loaded_lora = None
 
-	@classmethod
-	def INPUT_TYPES(s):
-		return {
-			"required": {
-				"model": ("MODEL",),
-				"lora_name": (folder_paths.get_filename_list("loras"), ),
-				"strength": ("FLOAT", {"default": 1.0, "min": -20.0, "max": 20.0, "step": 0.01}),
-			}
-		}
-	RETURN_TYPES = ("MODEL",)
-	FUNCTION = "load_lora"
-	CATEGORY = "ExtraModels/PixArt"
-	TITLE = "PixArt Load LoRA"
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "model": ("MODEL",),
+                "lora_name": (folder_paths.get_filename_list("loras"),),
+                "strength": ("FLOAT", {"default": 1.0, "min": -20.0, "max": 20.0, "step": 0.01}),
+            }
+        }
 
-	def load_lora(self, model, lora_name, strength,):
-		if strength == 0:
-			return (model)
+    RETURN_TYPES = ("MODEL",)
+    FUNCTION = "load_lora"
+    CATEGORY = "ExtraModels/PixArt"
+    TITLE = "PixArt Load LoRA"
 
-		lora_path = folder_paths.get_full_path("loras", lora_name)
-		lora = None
-		if self.loaded_lora is not None:
-			if self.loaded_lora[0] == lora_path:
-				lora = self.loaded_lora[1]
-			else:
-				temp = self.loaded_lora
-				self.loaded_lora = None
-				del temp
+    def load_lora(self, model, lora_name, strength, ):
+        if strength == 0:
+            return (model)
 
-		if lora is None:
-			lora = utils.load_torch_file(lora_path, safe_load=True)
-			self.loaded_lora = (lora_path, lora)
+        lora_path = folder_paths.get_full_path("loras", lora_name)
+        lora = None
+        if self.loaded_lora is not None:
+            if self.loaded_lora[0] == lora_path:
+                lora = self.loaded_lora[1]
+            else:
+                temp = self.loaded_lora
+                self.loaded_lora = None
+                del temp
 
-		model_lora = load_pixart_lora(model, lora, lora_path, strength,)
-		return (model_lora,)
+        if lora is None:
+            lora = utils.load_torch_file(lora_path, safe_load=True)
+            self.loaded_lora = (lora_path, lora)
+
+        model_lora = load_pixart_lora(model, lora, lora_path, strength, )
+        return (model_lora,)
+
 
 class PixArtResolutionCond:
-	@classmethod
-	def INPUT_TYPES(s):
-		return {
-			"required": {
-				"cond": ("CONDITIONING", ),
-				"width": ("INT", {"default": 1024.0, "min": 0, "max": 8192}),
-				"height": ("INT", {"default": 1024.0, "min": 0, "max": 8192}),
-			}
-		}
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "cond": ("CONDITIONING",),
+                "width": ("INT", {"default": 1024.0, "min": 0, "max": 8192}),
+                "height": ("INT", {"default": 1024.0, "min": 0, "max": 8192}),
+            }
+        }
 
-	RETURN_TYPES = ("CONDITIONING",)
-	RETURN_NAMES = ("cond",)
-	FUNCTION = "add_cond"
-	CATEGORY = "ExtraModels/PixArt"
-	TITLE = "PixArt Resolution Conditioning"
-	
-	def add_cond(self, cond, width, height):
-		for c in range(len(cond)):
-			cond[c][1].update({
-				"img_hw": [[height, width]],
-				"aspect_ratio": [[height/width]],
-			})
-		return (cond,)
+    RETURN_TYPES = ("CONDITIONING",)
+    RETURN_NAMES = ("cond",)
+    FUNCTION = "add_cond"
+    CATEGORY = "ExtraModels/PixArt"
+    TITLE = "PixArt Resolution Conditioning"
+
+    def add_cond(self, cond, width, height):
+        for c in range(len(cond)):
+            cond[c][1].update({
+                "img_hw": [[height, width]],
+                "aspect_ratio": [[height / width]],
+            })
+        return (cond,)
+
 
 class PixArtControlNetCond:
-	@classmethod
-	def INPUT_TYPES(s):
-		return {
-			"required": {
-				"cond": ("CONDITIONING",),
-				"latent": ("LATENT",),
-				# "image": ("IMAGE",),
-				# "vae": ("VAE",),
-				# "strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01})
-			}
-		}
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "cond": ("CONDITIONING",),
+                "latent": ("LATENT",),
+                # "image": ("IMAGE",),
+                # "vae": ("VAE",),
+                # "strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01})
+            }
+        }
 
-	RETURN_TYPES = ("CONDITIONING",)
-	RETURN_NAMES = ("cond",)
-	FUNCTION = "add_cond"
-	CATEGORY = "ExtraModels/PixArt"
-	TITLE = "PixArt ControlNet Conditioning"
+    RETURN_TYPES = ("CONDITIONING",)
+    RETURN_NAMES = ("cond",)
+    FUNCTION = "add_cond"
+    CATEGORY = "ExtraModels/PixArt"
+    TITLE = "PixArt ControlNet Conditioning"
 
-	def add_cond(self, cond, latent):
-		for c in range(len(cond)):
-			cond[c][1]["cn_hint"] = latent["samples"] * 0.18215
-		return (cond,)
+    def add_cond(self, cond, latent):
+        for c in range(len(cond)):
+            cond[c][1]["cn_hint"] = latent["samples"] * 0.18215
+        return (cond,)
 
-class PixArtT5TextEncode:
-	"""
-	Reference code, mostly to verify compatibility.
-	 Once everything works, this should instead inherit from the
-	 T5 text encode node and simply add the extra conds (res/ar).
-	"""
-	@classmethod
-	def INPUT_TYPES(s):
-		return {
-			"required": {
-				"text": ("STRING", {"multiline": True}),
-				"T5": ("T5",),
-			}
-		}
-
-	RETURN_TYPES = ("CONDITIONING",)
-	FUNCTION = "encode"
-	CATEGORY = "ExtraModels/PixArt"
-	TITLE = "PixArt T5 Text Encode [Reference]"
-
-	def mask_feature(self, emb, mask):
-		if emb.shape[0] == 1:
-			keep_index = mask.sum().item()
-			return emb[:, :, :keep_index, :], keep_index
-		else:
-			masked_feature = emb * mask[:, None, :, None]
-			return masked_feature, emb.shape[2]
-
-	def encode(self, text, T5):
-		text = text.lower().strip()
-		tokenizer_out = T5.tokenizer.tokenizer(
-			text,
-			max_length            = 120,
-			padding               = 'max_length',
-			truncation            = True,
-			return_attention_mask = True,
-			add_special_tokens    = True,
-			return_tensors        = 'pt'
-		)
-		tokens = tokenizer_out["input_ids"]
-		mask = tokenizer_out["attention_mask"]
-		embs = T5.cond_stage_model.transformer(
-			input_ids      = tokens.to(T5.load_device),
-			attention_mask = mask.to(T5.load_device),
-		)['last_hidden_state'].float()[:, None]
-		masked_embs, keep_index = self.mask_feature(
-			embs.detach().to("cpu"),
-			mask.detach().to("cpu")
-		)
-		masked_embs = masked_embs.squeeze(0) # match CLIP/internal
-		print("Encoded T5:", masked_embs.shape)
-		return ([[masked_embs, {}]], )
 
 NODE_CLASS_MAPPINGS = {
-	"PixArtCheckpointLoader" : PixArtCheckpointLoader,
-	"PixArtResolutionSelect" : PixArtResolutionSelect,
-	"PixArtLoraLoader" : PixArtLoraLoader,
-	"PixArtT5TextEncode" : PixArtT5TextEncode,
-	"PixArtResolutionCond" : PixArtResolutionCond,
-	"PixArtControlNetCond" : PixArtControlNetCond,
+    "PixArtCheckpointLoader": PixArtCheckpointLoader,
+    "PixArtResolutionSelect": PixArtResolutionSelect,
+    "PixArtLoraLoader": PixArtLoraLoader,
+    "PixArtResolutionCond": PixArtResolutionCond,
+    "PixArtControlNetCond": PixArtControlNetCond,
 }

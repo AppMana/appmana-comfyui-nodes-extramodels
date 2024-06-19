@@ -1,6 +1,7 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
 
+import numpy as np
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 # --------------------------------------------------------
@@ -8,24 +9,23 @@
 # GLIDE: https://github.com/openai/glide-text2im
 # MAE: https://github.com/facebookresearch/mae/blob/main/models_mae.py
 # --------------------------------------------------------
-import math
 import torch
 import torch.nn as nn
-import os
-import numpy as np
 from timm.models.layers import DropPath
 from timm.models.vision_transformer import PatchEmbed, Mlp
 
-
+from .PixArt_blocks import t2i_modulate, CaptionEmbedder, AttentionKVCompress, MultiHeadCrossAttention, T2IFinalLayer, \
+    TimestepEmbedder
 from .utils import auto_grad_checkpoint, to_2tuple
-from .PixArt_blocks import t2i_modulate, CaptionEmbedder, AttentionKVCompress, MultiHeadCrossAttention, T2IFinalLayer, TimestepEmbedder, LabelEmbedder, FinalLayer
 
 
 class PixArtBlock(nn.Module):
     """
     A PixArt block with adaptive layer norm (adaLN-single) conditioning.
     """
-    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, drop_path=0, input_size=None, sampling=None, sr_ratio=1, qk_norm=False, **block_kwargs):
+
+    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, drop_path=0, input_size=None, sampling=None, sr_ratio=1,
+                 qk_norm=False, **block_kwargs):
         super().__init__()
         self.norm1 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         self.attn = AttentionKVCompress(
@@ -36,7 +36,8 @@ class PixArtBlock(nn.Module):
         self.norm2 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         # to be compatible with lower version pytorch
         approx_gelu = lambda: nn.GELU(approximate="tanh")
-        self.mlp = Mlp(in_features=hidden_size, hidden_features=int(hidden_size * mlp_ratio), act_layer=approx_gelu, drop=0)
+        self.mlp = Mlp(in_features=hidden_size, hidden_features=int(hidden_size * mlp_ratio), act_layer=approx_gelu,
+                       drop=0)
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.scale_shift_table = nn.Parameter(torch.randn(6, hidden_size) / hidden_size ** 0.5)
         self.sampling = sampling
@@ -45,7 +46,8 @@ class PixArtBlock(nn.Module):
     def forward(self, x, y, t, mask=None, **kwargs):
         B, N, C = x.shape
 
-        shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = (self.scale_shift_table[None] + t.reshape(B, 6, -1)).chunk(6, dim=1)
+        shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = (
+                    self.scale_shift_table[None] + t.reshape(B, 6, -1)).chunk(6, dim=1)
         x = x + self.drop_path(gate_msa * self.attn(t2i_modulate(self.norm1(x), shift_msa, scale_msa)).reshape(B, N, C))
         x = x + self.cross_attn(x, y, mask)
         x = x + self.drop_path(gate_mlp * self.mlp(t2i_modulate(self.norm2(x), shift_mlp, scale_mlp)))
@@ -58,6 +60,7 @@ class PixArt(nn.Module):
     """
     Diffusion model with a Transformer backbone.
     """
+
     def __init__(
             self,
             input_size=32,
@@ -102,7 +105,7 @@ class PixArt(nn.Module):
         self.y_embedder = CaptionEmbedder(
             in_channels=caption_channels, hidden_size=hidden_size, uncond_prob=class_dropout_prob,
             act_layer=approx_gelu, token_num=model_max_length
-		)
+        )
         drop_path = [x.item() for x in torch.linspace(0, drop_path, depth)]  # stochastic depth decay rule
         self.kv_compress_config = kv_compress_config
         if kv_compress_config is None:
@@ -136,7 +139,7 @@ class PixArt(nn.Module):
         timestep = t.to(self.dtype)
         y = y.to(self.dtype)
         pos_embed = self.pos_embed.to(self.dtype)
-        self.h, self.w = x.shape[-2]//self.patch_size, x.shape[-1]//self.patch_size
+        self.h, self.w = x.shape[-2] // self.patch_size, x.shape[-1] // self.patch_size
         x = self.x_embedder(x) + pos_embed  # (N, T, D), where T = H * W / patch_size ** 2
         t = self.t_embedder(timestep.to(x.dtype))  # (N, D)
         t0 = self.t_block(t)
@@ -170,9 +173,9 @@ class PixArt(nn.Module):
 
         ## run original forward pass
         out = self.forward_raw(
-            x = x.to(self.dtype),
-            t = timesteps.to(self.dtype),
-            y = context.to(self.dtype),
+            x=x.to(self.dtype),
+            t=timesteps.to(self.dtype),
+            y=context.to(self.dtype),
         )
 
         ## only return EPS
@@ -204,8 +207,8 @@ def get_2d_sincos_pos_embed(embed_dim, grid_size, cls_token=False, extra_tokens=
     """
     if isinstance(grid_size, int):
         grid_size = to_2tuple(grid_size)
-    grid_h = np.arange(grid_size[0], dtype=np.float32) / (grid_size[0]/base_size) / pe_interpolation
-    grid_w = np.arange(grid_size[1], dtype=np.float32) / (grid_size[1]/base_size) / pe_interpolation
+    grid_h = np.arange(grid_size[0], dtype=np.float32) / (grid_size[0] / base_size) / pe_interpolation
+    grid_w = np.arange(grid_size[1], dtype=np.float32) / (grid_size[1] / base_size) / pe_interpolation
     grid = np.meshgrid(grid_w, grid_h)  # here w goes first
     grid = np.stack(grid, axis=0)
     grid = grid.reshape([2, 1, grid_size[1], grid_size[0]])

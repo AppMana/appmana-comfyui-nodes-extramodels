@@ -9,6 +9,7 @@ from .norm_layers import RMSNorm
 from .poolers import AttentionPool
 from .posemb_layers import get_2d_rotary_pos_embed, get_fill_resize_and_crop
 
+
 def modulate(x, shift, scale):
     return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
 
@@ -29,6 +30,7 @@ class HunYuanDiTBlock(nn.Module):
     """
     A HunYuanDiT block with `add` conditioning.
     """
+
     def __init__(self,
                  hidden_size,
                  c_emb_size,
@@ -118,6 +120,7 @@ class FinalLayer(nn.Module):
     """
     The final layer of HunYuanDiT.
     """
+
     def __init__(self, final_hidden_size, c_emb_size, patch_size, out_channels):
         super().__init__()
         self.norm_final = nn.LayerNorm(final_hidden_size, elementwise_affine=False, eps=1e-6)
@@ -159,6 +162,7 @@ class HunYuanDiT(nn.Module):
     log_fn: callable
         The logging function.
     """
+
     def __init__(
             self, args,
             input_size=(32, 32),
@@ -248,18 +252,18 @@ class HunYuanDiT(nn.Module):
         # self.initialize_weights()
 
     def forward_raw(self,
-                x,
-                t,
-                encoder_hidden_states=None,
-                text_embedding_mask=None,
-                encoder_hidden_states_t5=None,
-                text_embedding_mask_t5=None,
-                image_meta_size=None,
-                style=None,
-                cos_cis_img=None,
-                sin_cis_img=None,
-                return_dict=False,
-                ):
+                    x,
+                    t,
+                    encoder_hidden_states=None,
+                    text_embedding_mask=None,
+                    encoder_hidden_states_t5=None,
+                    text_embedding_mask_t5=None,
+                    image_meta_size=None,
+                    style=None,
+                    cos_cis_img=None,
+                    sin_cis_img=None,
+                    return_dict=False,
+                    ):
         """
         Forward pass of the encoder.
 
@@ -287,10 +291,10 @@ class HunYuanDiT(nn.Module):
             Whether to return a dictionary.
         """
 
-        text_states = encoder_hidden_states                     # 2,77,1024
-        text_states_t5 = encoder_hidden_states_t5               # 2,256,2048
-        text_states_mask = text_embedding_mask.bool()           # 2,77
-        text_states_t5_mask = text_embedding_mask_t5.bool()     # 2,256
+        text_states = encoder_hidden_states  # 2,77,1024
+        text_states_t5 = encoder_hidden_states_t5  # 2,256,2048
+        text_states_mask = text_embedding_mask.bool()  # 2,77
+        text_states_t5_mask = text_embedding_mask_t5.bool()  # 2,256
         b_t5, l_t5, c_t5 = text_states_t5.shape
         text_states_t5 = self.mlp_t5(text_states_t5.view(-1, c_t5))
         text_states = torch.cat([text_states, text_states_t5.view(b_t5, l_t5, -1)], dim=1)  # 2,205，1024
@@ -314,9 +318,9 @@ class HunYuanDiT(nn.Module):
         extra_vec = self.pooler(encoder_hidden_states_t5)
 
         # Build image meta size tokens
-        image_meta_size = timestep_embedding(image_meta_size.view(-1), 256)   # [B * 6, 256]
+        image_meta_size = timestep_embedding(image_meta_size.view(-1), 256)  # [B * 6, 256]
         # if self.args.use_fp16:
-            # image_meta_size = image_meta_size.half()
+        # image_meta_size = image_meta_size.half()
         image_meta_size = image_meta_size.view(-1, 6 * 256)
         extra_vec = torch.cat([extra_vec, image_meta_size], dim=1)  # [B, D + 6 * 256]
 
@@ -332,21 +336,21 @@ class HunYuanDiT(nn.Module):
         for layer, block in enumerate(self.blocks):
             if layer > self.depth // 2:
                 skip = skips.pop()
-                x = block(x, c, text_states, freqs_cis_img, skip)   # (N, L, D)
+                x = block(x, c, text_states, freqs_cis_img, skip)  # (N, L, D)
             else:
-                x = block(x, c, text_states, freqs_cis_img)         # (N, L, D)
+                x = block(x, c, text_states, freqs_cis_img)  # (N, L, D)
 
             if layer < (self.depth // 2 - 1):
                 skips.append(x)
 
         # ========================= Final layer =========================
-        x = self.final_layer(x, c)                              # (N, L, patch_size ** 2 * out_channels)
-        x = self.unpatchify(x, th, tw)                          # (N, out_channels, H, W)
+        x = self.final_layer(x, c)  # (N, L, patch_size ** 2 * out_channels)
+        x = self.unpatchify(x, th, tw)  # (N, out_channels, H, W)
 
         if return_dict:
             return {'x': x}
         return x
-   
+
     def calc_rope(self, height, width):
         """
         Probably not the best in terms of perf to have this here
@@ -359,7 +363,8 @@ class HunYuanDiT(nn.Module):
         rope = get_2d_rotary_pos_embed(self.head_size, *sub_args)
         return rope
 
-    def forward(self, x, timesteps, context, context_mask=None, context_t5=None, context_t5_mask=None, src_size_cond=(1024,1024), **kwargs):
+    def forward(self, x, timesteps, context, context_mask=None, context_t5=None, context_t5_mask=None,
+                src_size_cond=(1024, 1024), **kwargs):
         """
         Forward pass that adapts comfy input to original forward function
         x: (N, C, H, W) tensor of spatial inputs (images or latent representations of images)
@@ -375,9 +380,9 @@ class HunYuanDiT(nn.Module):
 
         # image size - todo separate for cond/uncond when batched
         if torch.is_tensor(src_size_cond):
-                src_size_cond = (int(src_size_cond[0][0]), int(src_size_cond[0][1]))
-        
-        image_size = (x.shape[2]//2*16, x.shape[3]//2*16)
+            src_size_cond = (int(src_size_cond[0][0]), int(src_size_cond[0][1]))
+
+        image_size = (x.shape[2] // 2 * 16, x.shape[3] // 2 * 16)
         size_cond = list(src_size_cond) + [image_size[1], image_size[0], 0, 0]
         image_meta_size = torch.as_tensor([size_cond] * x.shape[0], device=x.device)
 
@@ -386,35 +391,34 @@ class HunYuanDiT(nn.Module):
 
         # Update x_embedder if image size changed
         if self.last_size != image_size:
-                from tqdm import tqdm
-                tqdm.write(f"HyDiT: New image size {image_size}")
-                self.x_embedder.update_image_size(
-                        (image_size[0]//8, image_size[1]//8), 
-                )
-                self.last_size = image_size
+            from tqdm import tqdm
+            tqdm.write(f"HyDiT: New image size {image_size}")
+            self.x_embedder.update_image_size(
+                (image_size[0] // 8, image_size[1] // 8),
+            )
+            self.last_size = image_size
 
         # Run original forward pass
         out = self.forward_raw(
-                x = x.to(self.dtype),
-                t = timesteps.to(self.dtype),
-                encoder_hidden_states = context.to(self.dtype),
-                text_embedding_mask   = context_mask.to(self.dtype),
-                encoder_hidden_states_t5 = context_t5.to(self.dtype),
-                text_embedding_mask_t5   = context_t5_mask.to(self.dtype),
-                image_meta_size = image_meta_size.to(self.dtype),
-                style = style,
-                cos_cis_img = rope[0],
-                sin_cis_img = rope[1],
+            x=x.to(self.dtype),
+            t=timesteps.to(self.dtype),
+            encoder_hidden_states=context.to(self.dtype),
+            text_embedding_mask=context_mask.to(self.dtype),
+            encoder_hidden_states_t5=context_t5.to(self.dtype),
+            text_embedding_mask_t5=context_t5_mask.to(self.dtype),
+            image_meta_size=image_meta_size.to(self.dtype),
+            style=style,
+            cos_cis_img=rope[0],
+            sin_cis_img=rope[1],
         )
-        
+
         # return
         out = out.to(torch.float)
         if self.learn_sigma:
-                eps, rest = out[:, :self.in_channels], out[:, self.in_channels:]
-                return eps
+            eps, rest = out[:, :self.in_channels], out[:, self.in_channels:]
+            return eps
         else:
-                return out
-
+            return out
 
     def initialize_weights(self):
         # Initialize transformer layers:
@@ -423,6 +427,7 @@ class HunYuanDiT(nn.Module):
                 torch.nn.init.xavier_uniform_(module.weight)
                 if module.bias is not None:
                     nn.init.constant_(module.bias, 0)
+
         self.apply(_basic_init)
 
         # Initialize patch_embed like nn.Linear (instead of nn.Conv2d):

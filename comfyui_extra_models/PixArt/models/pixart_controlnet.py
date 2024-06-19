@@ -1,15 +1,16 @@
 import re
+from copy import deepcopy
+from typing import Any, Mapping
+
 import torch
 import torch.nn as nn
-
-from copy import deepcopy
 from torch import Tensor
 from torch.nn import Module, Linear, init
-from typing import Any, Mapping
 
 from .PixArt import PixArt, get_2d_sincos_pos_embed
 from .PixArtMS import PixArtMSBlock, PixArtMS
 from .utils import auto_grad_checkpoint
+
 
 # The implementation of ControlNet-Half architrecture
 # https://github.com/lllyasviel/ControlNet/discussions/188
@@ -24,18 +25,18 @@ class ControlT2IDitBlockHalf(Module):
 
         self.copied_block.load_state_dict(base_block.state_dict())
         self.copied_block.train()
-        
+
         self.hidden_size = hidden_size = base_block.hidden_size
         if self.block_index == 0:
             self.before_proj = Linear(hidden_size, hidden_size)
             init.zeros_(self.before_proj.weight)
             init.zeros_(self.before_proj.bias)
-        self.after_proj = Linear(hidden_size, hidden_size) 
+        self.after_proj = Linear(hidden_size, hidden_size)
         init.zeros_(self.after_proj.weight)
         init.zeros_(self.after_proj.bias)
 
     def forward(self, x, y, t, mask=None, c=None):
-        
+
         if self.block_index == 0:
             # the first block
             c = self.before_proj(c)
@@ -45,9 +46,9 @@ class ControlT2IDitBlockHalf(Module):
             # load from previous c and produce the c for skip connection
             c = self.copied_block(c, y, t, mask)
             c_skip = self.after_proj(c)
-        
+
         return c, c_skip
-        
+
 
 # The implementation of ControlPixArtHalf net
 class ControlPixArtHalf(Module):
@@ -66,7 +67,7 @@ class ControlPixArtHalf(Module):
         for i in range(copy_blocks_num):
             self.controlnet.append(ControlT2IDitBlockHalf(base_model.blocks[i], i))
         self.controlnet = nn.ModuleList(self.controlnet)
-    
+
     def __getattr__(self, name: str) -> Tensor or Module:
         if name in ['forward', 'forward_with_dpmsolver', 'forward_with_cfg', 'forward_c', 'load_state_dict']:
             return self.__dict__[name]
@@ -76,8 +77,10 @@ class ControlPixArtHalf(Module):
             return getattr(self.base_model, name)
 
     def forward_c(self, c):
-        self.h, self.w = c.shape[-2]//self.patch_size, c.shape[-1]//self.patch_size
-        pos_embed = torch.from_numpy(get_2d_sincos_pos_embed(self.pos_embed.shape[-1], (self.h, self.w), lewei_scale=self.lewei_scale, base_size=self.base_size)).unsqueeze(0).to(c.device).to(self.dtype)
+        self.h, self.w = c.shape[-2] // self.patch_size, c.shape[-1] // self.patch_size
+        pos_embed = torch.from_numpy(
+            get_2d_sincos_pos_embed(self.pos_embed.shape[-1], (self.h, self.w), lewei_scale=self.lewei_scale,
+                                    base_size=self.base_size)).unsqueeze(0).to(c.device).to(self.dtype)
         return self.x_embedder(c) + pos_embed if c is not None else c
 
     # def forward(self, x, t, c, **kwargs):
@@ -97,7 +100,7 @@ class ControlPixArtHalf(Module):
         timestep = timestep.to(self.dtype)
         y = y.to(self.dtype)
         pos_embed = self.pos_embed.to(self.dtype)
-        self.h, self.w = x.shape[-2]//self.patch_size, x.shape[-1]//self.patch_size
+        self.h, self.w = x.shape[-2] // self.patch_size, x.shape[-1] // self.patch_size
         x = self.x_embedder(x) + pos_embed  # (N, T, D), where T = H * W / patch_size ** 2
         t = self.t_embedder(timestep.to(x.dtype))  # (N, D)
         t0 = self.t_block(t)
@@ -113,14 +116,15 @@ class ControlPixArtHalf(Module):
             y = y.squeeze(1).view(1, -1, x.shape[-1])
 
         # define the first layer
-        x = auto_grad_checkpoint(self.base_model.blocks[0], x, y, t0, y_lens, **kwargs)  # (N, T, D) #support grad checkpoint
+        x = auto_grad_checkpoint(self.base_model.blocks[0], x, y, t0, y_lens,
+                                 **kwargs)  # (N, T, D) #support grad checkpoint
 
         if c is not None:
             # update c
             for index in range(1, self.copy_blocks_num + 1):
                 c, c_skip = auto_grad_checkpoint(self.controlnet[index - 1], x, y, t0, y_lens, c, **kwargs)
                 x = auto_grad_checkpoint(self.base_model.blocks[index], x + c_skip, y, t0, y_lens, **kwargs)
-        
+
             # update x
             for index in range(self.copy_blocks_num + 1, self.total_blocks_num):
                 x = auto_grad_checkpoint(self.base_model.blocks[index], x, y, t0, y_lens, **kwargs)
@@ -146,10 +150,10 @@ class ControlPixArtHalf(Module):
 
         ## run original forward pass
         out = self.forward_raw(
-            x = x.to(self.dtype),
-            timestep = timesteps.to(self.dtype),
-            y = context.to(self.dtype),
-            c = cn_hint,
+            x=x.to(self.dtype),
+            timestep=timesteps.to(self.dtype),
+            y=context.to(self.dtype),
+            c=cn_hint,
         )
 
         ## only return EPS
@@ -180,7 +184,7 @@ class ControlPixArtHalf(Module):
                     state_dict[v] = state_dict.pop(k)
 
             return self.base_model.load_state_dict(state_dict, strict)
-    
+
     def unpatchify(self, x):
         """
         x: (N, T, patch_size**2 * C)
@@ -197,8 +201,8 @@ class ControlPixArtHalf(Module):
 
     # @property
     # def dtype(self):
-        ## 返回模型参数的数据类型
-        # return next(self.parameters()).dtype
+    ## 返回模型参数的数据类型
+    # return next(self.parameters()).dtype
 
 
 # The implementation for PixArtMS_Half + 1024 resolution
@@ -223,9 +227,11 @@ class ControlPixArtMSHalf(ControlPixArtHalf):
         timestep = timestep.to(self.dtype)
         y = y.to(self.dtype)
         c_size, ar = data_info['img_hw'].to(self.dtype), data_info['aspect_ratio'].to(self.dtype)
-        self.h, self.w = x.shape[-2]//self.patch_size, x.shape[-1]//self.patch_size
+        self.h, self.w = x.shape[-2] // self.patch_size, x.shape[-1] // self.patch_size
 
-        pos_embed = torch.from_numpy(get_2d_sincos_pos_embed(self.pos_embed.shape[-1], (self.h, self.w), lewei_scale=self.lewei_scale, base_size=self.base_size)).unsqueeze(0).to(x.device).to(self.dtype)
+        pos_embed = torch.from_numpy(
+            get_2d_sincos_pos_embed(self.pos_embed.shape[-1], (self.h, self.w), lewei_scale=self.lewei_scale,
+                                    base_size=self.base_size)).unsqueeze(0).to(x.device).to(self.dtype)
         x = self.x_embedder(x) + pos_embed  # (N, T, D), where T = H * W / patch_size ** 2
         t = self.t_embedder(timestep)  # (N, D)
         csize = self.csize_embedder(c_size, bs)  # (N, D)
@@ -244,14 +250,15 @@ class ControlPixArtMSHalf(ControlPixArtHalf):
             y = y.squeeze(1).view(1, -1, x.shape[-1])
 
         # define the first layer
-        x = auto_grad_checkpoint(self.base_model.blocks[0], x, y, t0, y_lens, **kwargs)  # (N, T, D) #support grad checkpoint
+        x = auto_grad_checkpoint(self.base_model.blocks[0], x, y, t0, y_lens,
+                                 **kwargs)  # (N, T, D) #support grad checkpoint
 
         if c is not None:
             # update c
             for index in range(1, self.copy_blocks_num + 1):
                 c, c_skip = auto_grad_checkpoint(self.controlnet[index - 1], x, y, t0, y_lens, c, **kwargs)
                 x = auto_grad_checkpoint(self.base_model.blocks[index], x + c_skip, y, t0, y_lens, **kwargs)
-        
+
             # update x
             for index in range(self.copy_blocks_num + 1, self.total_blocks_num):
                 x = auto_grad_checkpoint(self.base_model.blocks[index], x, y, t0, y_lens, **kwargs)
@@ -278,7 +285,7 @@ class ControlPixArtMSHalf(ControlPixArtHalf):
         data_info = {}
         if img_hw is None:
             data_info["img_hw"] = torch.tensor(
-                [[x.shape[2]*8, x.shape[3]*8]],
+                [[x.shape[2] * 8, x.shape[3] * 8]],
                 dtype=self.dtype,
                 device=x.device
             ).repeat(bs, 1)
@@ -286,7 +293,7 @@ class ControlPixArtMSHalf(ControlPixArtHalf):
             data_info["img_hw"] = img_hw.to(x.dtype)
         if aspect_ratio is None or True:
             data_info["aspect_ratio"] = torch.tensor(
-                [[x.shape[2]/x.shape[3]]],
+                [[x.shape[2] / x.shape[3]]],
                 dtype=self.dtype,
                 device=x.device
             ).repeat(bs, 1)
@@ -299,10 +306,10 @@ class ControlPixArtMSHalf(ControlPixArtHalf):
 
         ## run original forward pass
         out = self.forward_raw(
-            x = x.to(self.dtype),
-            timestep = timesteps.to(self.dtype),
-            y = context.to(self.dtype),
-            c = cn_hint,
+            x=x.to(self.dtype),
+            timestep=timesteps.to(self.dtype),
+            y=context.to(self.dtype),
+            c=cn_hint,
             data_info=data_info,
         )
 

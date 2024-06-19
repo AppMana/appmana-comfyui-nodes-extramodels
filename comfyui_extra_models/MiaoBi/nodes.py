@@ -1,16 +1,30 @@
-import os
-import folder_paths
-
-import comfy.sd
 import comfy.diffusers_load
-from .tokenizer import MiaoBiTokenizer
+import comfy.sd
+from comfy.cmd import folder_paths
+from comfy.model_downloader import get_or_download, get_filename_list_with_downloadable, KNOWN_HUGGINGFACE_MODEL_REPOS
+from comfy.model_downloader_types import HuggingFile
+from comfy.nodes.base_nodes import DiffusersLoader
+from .miaobi_tokenizer import MiaoBiTokenizer
+
+KNOWN_MIAOBI_CLIP_MODELS = [
+    HuggingFile("ShineChen1024/MiaoBi", "miaobi_beta0.9/text_encoder/model.safetensors",
+                save_with_filename="MiaoBi_CLIP.safetensors")
+]
+
+KNOWN_MIAOBI_UNET = [
+    HuggingFile("ShineChen1024/MiaoBi", "miaobi_beta0.9/unet/diffusion_pytorch_model.safetensors",
+                save_with_filename="MiaoBi.safetensors")
+]
+
+KNOWN_HUGGINGFACE_MODEL_REPOS.add("ShineChen1024/MiaoBi")
+
 
 class MiaoBiCLIPLoader:
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "clip_name": (folder_paths.get_filename_list("clip"),),
+                "clip_name": (get_filename_list_with_downloadable("clip", KNOWN_MIAOBI_CLIP_MODELS),),
             }
         }
 
@@ -21,7 +35,7 @@ class MiaoBiCLIPLoader:
 
     def load_mbclip(self, clip_name):
         clip_type = comfy.sd.CLIPType.STABLE_DIFFUSION
-        clip_path = folder_paths.get_full_path("clip", clip_name)
+        clip_path = get_or_download("clip", clip_name, KNOWN_MIAOBI_CLIP_MODELS)
         clip = comfy.sd.load_clip(
             ckpt_paths=[clip_path],
             embedding_directory=folder_paths.get_folder_paths("embeddings"),
@@ -29,46 +43,19 @@ class MiaoBiCLIPLoader:
         )
         # override tokenizer
         clip.tokenizer.clip_l = MiaoBiTokenizer()
-        return (clip,)
+        return clip,
 
 
-class MiaoBiDiffusersLoader:
-    @classmethod
-    def INPUT_TYPES(cls):
-        paths = []
-        for search_path in folder_paths.get_folder_paths("diffusers"):
-            if os.path.exists(search_path):
-                for root, subdir, files in os.walk(search_path, followlinks=True):
-                    if "model_index.json" in files:
-                        paths.append(os.path.relpath(root, start=search_path))
-
-        return {
-            "required": {
-                "model_path": (paths,),
-                }
-            }
-
-    RETURN_TYPES = ("MODEL", "CLIP", "VAE")
-    FUNCTION = "load_mbcheckpoint"
+class MiaoBiDiffusersLoader(DiffusersLoader):
     CATEGORY = "ExtraModels/MiaoBi"
     TITLE = "MiaoBi Checkpoint Loader (Diffusers)"
 
-    def load_mbcheckpoint(self, model_path, output_vae=True, output_clip=True):
-        for search_path in folder_paths.get_folder_paths("diffusers"):
-            if os.path.exists(search_path):
-                path = os.path.join(search_path, model_path)
-                if os.path.exists(path):
-                    model_path = path
-                    break
-        unet, clip, vae = comfy.diffusers_load.load_diffusers(
-            model_path,
-            output_vae = output_vae,
-            output_clip = output_clip,
-            embedding_directory = folder_paths.get_folder_paths("embeddings")
-        )
+    def load_checkpoint(self, model_path, output_vae=True, output_clip=True):
+        unet, clip, vae = super().load_checkpoint(model_path, output_vae, output_clip)
         # override tokenizer
         clip.tokenizer.clip_l = MiaoBiTokenizer()
-        return (unet, clip, vae)
+        return unet, clip, vae
+
 
 NODE_CLASS_MAPPINGS = {
     "MiaoBiCLIPLoader": MiaoBiCLIPLoader,

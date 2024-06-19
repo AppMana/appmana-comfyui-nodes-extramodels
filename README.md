@@ -1,41 +1,25 @@
+This fork is an installable version of the ComfyUI Extra Models nodes authored by **City96**.
+
 # Extra Models for ComfyUI
 
 This repository aims to add support for various different image diffusion models to ComfyUI.
 
 ## Installation
 
-Simply clone this repo to your custom_nodes folder using the following command:
+You must install the corresponding version of `xformers` for your `torch` version:
 
-`git clone https://github.com/city96/ComfyUI_ExtraModels custom_nodes/ComfyUI_ExtraModels`
-
-You will also have to install the requirements from the provided file by running `pip install -r requirements.txt` inside your VENV/conda env. If you downloaded the standalone version of ComfyUI, then follow the steps below.
-
-### Standalone ComfyUI
-
-I haven't tested this completely, so if you know what you're doing, use the regular venv/`git clone` install option when installing ComfyUI.
-
-Go to the where you unpacked `ComfyUI_windows_portable` to (where your run_nvidia_gpu.bat file is) and open a command line window. Press `CTRL+SHIFT+Right click` in an empty space and click "Open PowerShell window here".
-
-Clone the repository to your custom nodes folder, assuming haven't installed in through the manager.
-
-`git clone https://github.com/city96/ComfyUI_ExtraModels .\ComfyUI\custom_nodes\ComfyUI_ExtraModels`
-
-To install the requirements on windows, run these commands in the same window:
-```
-.\python_embeded\python.exe -s -m pip install -r .\ComfyUI\custom_nodes\ComfyUI_ExtraModels\requirements.txt
-.\python_embeded\python.exe -s -m pip install bitsandbytes --prefer-binary --extra-index-url=https://jllllll.github.io/bitsandbytes-windows-webui
+```shell
+# torch 2.2.1:
+pip install --no-deps --no-build-isolation xformers==0.0.25
+# torch 2.3.0:
+pip install --no-deps --no-build-isolation xformers==0.0.26.post1
 ```
 
-To update, open the command line window like before and run the following commands:
+Then, install:
 
+```shell
+pip install git+https://github.com/AppMana/ComfyUI_ExtraModels.git
 ```
-cd .\ComfyUI\custom_nodes\ComfyUI_ExtraModels\
-git pull
-```
-
-Alternatively, use the manager, assuming it has an update function.
-
-
 
 ## PixArt
 
@@ -99,22 +83,13 @@ WIP implementation of [HunYuan DiT by Tencent](https://github.com/Tencent/Hunyua
 
 The initial work on this was done by [chaojie](https://github.com/chaojie) in [this PR](https://github.com/city96/ComfyUI_ExtraModels/pull/37).
 
-Instructions:
-- Download the [first text encoder from here](https://huggingface.co/Tencent-Hunyuan/HunyuanDiT/blob/main/t2i/clip_text_encoder/pytorch_model.bin) and place it in `ComfyUI/models/clip` - rename to "chinese-roberta-wwm-ext-large.bin"
-- Download the [second text encoder from here](https://huggingface.co/Tencent-Hunyuan/HunyuanDiT/blob/main/t2i/mt5/pytorch_model.bin) and place it in `ComfyUI/models/t5` - rename it to "mT5-xl.bin"
-- Download the [model file from here](https://huggingface.co/Tencent-Hunyuan/HunyuanDiT/blob/main/t2i/model/pytorch_model_module.pt) and place it in `ComfyUI/checkpoints` - rename it to "HunYuanDiT.pt"
-- Download/use any SDXL VAE, for example [this one](https://huggingface.co/madebyollin/sdxl-vae-fp16-fix)
-
-You may also try the following alternate model files for faster loading speed/smaller file size:
-- converted [second text encoder](https://huggingface.co/city96/mt5-xl-encoder-fp16/blob/main/model.safetensors) - rename to `mT5-xl-encoder-fp16.safetensors` and placed in `ComfyUI/models/t5`
-
 You can use the "simple" text encode node to only use one prompt, or you can use the regular one to pass different text to CLIP/T5.
 
-[Sample Workflow](https://github.com/city96/ComfyUI_ExtraModels/files/15444231/HyDiTV1.json)
+Download this workflow and run it. It will download the models into the correct places.
 
-![image](https://github.com/city96/ComfyUI_ExtraModels/assets/125218114/7a9d6e34-d3f4-4f67-a17f-4f2d6795e54e)
+[Sample Workflow](https://github.com/user-attachments/files/15506664/HyDiTV1.json)
 
-
+![ComfyUI_HunYuan_00001_](https://github.com/AppMana/ComfyUI_ExtraModels/assets/2229300/5e4e1653-3f97-4c53-bc8e-3d7ee999b094)
 
 ## DiT
 

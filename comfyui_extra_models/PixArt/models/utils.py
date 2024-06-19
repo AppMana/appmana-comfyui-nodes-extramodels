@@ -1,19 +1,24 @@
+from collections.abc import Iterable
+from itertools import repeat
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint, checkpoint_sequential
-from collections.abc import Iterable
-from itertools import repeat
+
 
 def _ntuple(n):
     def parse(x):
         if isinstance(x, Iterable) and not isinstance(x, str):
             return x
         return tuple(repeat(x, n))
+
     return parse
+
 
 to_1tuple = _ntuple(1)
 to_2tuple = _ntuple(2)
+
 
 def set_grad_checkpoint(model, use_fp32_attention=False, gc_step=1):
     assert isinstance(model, nn.Module)
@@ -22,7 +27,9 @@ def set_grad_checkpoint(model, use_fp32_attention=False, gc_step=1):
         module.grad_checkpointing = True
         module.fp32_attention = use_fp32_attention
         module.grad_checkpointing_step = gc_step
+
     model.apply(set_attr)
+
 
 def auto_grad_checkpoint(module, *args, **kwargs):
     if getattr(module, 'grad_checkpointing', False):
@@ -33,8 +40,8 @@ def auto_grad_checkpoint(module, *args, **kwargs):
             return checkpoint(module, *args, **kwargs)
     return module(*args, **kwargs)
 
-def checkpoint_sequential(functions, step, input, *args, **kwargs):
 
+def checkpoint_sequential(functions, step, input, *args, **kwargs):
     # Hack for keyword-only parameter in a python 2.7-compliant way
     preserve = kwargs.pop('preserve_rng_state', True)
     if kwargs:
@@ -45,6 +52,7 @@ def checkpoint_sequential(functions, step, input, *args, **kwargs):
             for j in range(start, end + 1):
                 input = functions[j](input, *args)
             return input
+
         return forward
 
     if isinstance(functions, torch.nn.Sequential):
@@ -57,6 +65,7 @@ def checkpoint_sequential(functions, step, input, *args, **kwargs):
         end = start + step - 1
         input = checkpoint(run_function(start, end, functions), input, preserve_rng_state=preserve)
     return run_function(end + 1, len(functions) - 1, functions)(input)
+
 
 def get_rel_pos(q_size, k_size, rel_pos):
     """
@@ -90,6 +99,7 @@ def get_rel_pos(q_size, k_size, rel_pos):
 
     return rel_pos_resized[relative_coords.long()]
 
+
 def add_decomposed_rel_pos(attn, q, rel_pos_h, rel_pos_w, q_size, k_size):
     """
     Calculate decomposed Relative Positional Embeddings from :paper:`mvitv2`.
@@ -116,7 +126,7 @@ def add_decomposed_rel_pos(attn, q, rel_pos_h, rel_pos_w, q_size, k_size):
     rel_w = torch.einsum("bhwc,wkc->bhwk", r_q, Rw)
 
     attn = (
-        attn.view(B, q_h, q_w, k_h, k_w) + rel_h[:, :, :, :, None] + rel_w[:, :, :, None, :]
+            attn.view(B, q_h, q_w, k_h, k_w) + rel_h[:, :, :, :, None] + rel_w[:, :, :, None, :]
     ).view(B, q_h * q_w, k_h * k_w)
 
     return attn

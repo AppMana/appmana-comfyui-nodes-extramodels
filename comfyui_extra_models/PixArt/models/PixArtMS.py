@@ -10,19 +10,20 @@
 # --------------------------------------------------------
 import torch
 import torch.nn as nn
-from tqdm import tqdm
 from timm.models.layers import DropPath
 from timm.models.vision_transformer import Mlp
 
-from .utils import auto_grad_checkpoint, to_2tuple
-from .PixArt_blocks import t2i_modulate, CaptionEmbedder, AttentionKVCompress, MultiHeadCrossAttention, T2IFinalLayer, TimestepEmbedder, SizeEmbedder
 from .PixArt import PixArt, get_2d_sincos_pos_embed
+from .PixArt_blocks import t2i_modulate, CaptionEmbedder, AttentionKVCompress, MultiHeadCrossAttention, T2IFinalLayer, \
+    SizeEmbedder
+from .utils import auto_grad_checkpoint, to_2tuple
 
 
 class PatchEmbed(nn.Module):
     """
     2D Image to Patch Embedding
     """
+
     def __init__(
             self,
             patch_size=16,
@@ -51,6 +52,7 @@ class PixArtMSBlock(nn.Module):
     """
     A PixArt block with adaptive layer norm zero (adaLN-Zero) conditioning.
     """
+
     def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, drop_path=0., input_size=None,
                  sampling=None, sr_ratio=1, qk_norm=False, **block_kwargs):
         super().__init__()
@@ -64,14 +66,16 @@ class PixArtMSBlock(nn.Module):
         self.norm2 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         # to be compatible with lower version pytorch
         approx_gelu = lambda: nn.GELU(approximate="tanh")
-        self.mlp = Mlp(in_features=hidden_size, hidden_features=int(hidden_size * mlp_ratio), act_layer=approx_gelu, drop=0)
+        self.mlp = Mlp(in_features=hidden_size, hidden_features=int(hidden_size * mlp_ratio), act_layer=approx_gelu,
+                       drop=0)
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.scale_shift_table = nn.Parameter(torch.randn(6, hidden_size) / hidden_size ** 0.5)
 
     def forward(self, x, y, t, mask=None, HW=None, **kwargs):
         B, N, C = x.shape
 
-        shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = (self.scale_shift_table[None] + t.reshape(B, 6, -1)).chunk(6, dim=1)
+        shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = (
+                    self.scale_shift_table[None] + t.reshape(B, 6, -1)).chunk(6, dim=1)
         x = x + self.drop_path(gate_msa * self.attn(t2i_modulate(self.norm1(x), shift_msa, scale_msa), HW=HW))
         x = x + self.cross_attn(x, y, mask)
         x = x + self.drop_path(gate_mlp * self.mlp(t2i_modulate(self.norm2(x), shift_mlp, scale_mlp)))
@@ -84,6 +88,7 @@ class PixArtMS(PixArt):
     """
     Diffusion model with a Transformer backbone.
     """
+
     def __init__(
             self,
             input_size=32,
@@ -133,11 +138,13 @@ class PixArtMS(PixArt):
             nn.Linear(hidden_size, 6 * hidden_size, bias=True)
         )
         self.x_embedder = PatchEmbed(patch_size, in_channels, hidden_size, bias=True)
-        self.y_embedder = CaptionEmbedder(in_channels=caption_channels, hidden_size=hidden_size, uncond_prob=class_dropout_prob, act_layer=approx_gelu, token_num=model_max_length)
+        self.y_embedder = CaptionEmbedder(in_channels=caption_channels, hidden_size=hidden_size,
+                                          uncond_prob=class_dropout_prob, act_layer=approx_gelu,
+                                          token_num=model_max_length)
         self.micro_conditioning = micro_condition
         if self.micro_conditioning:
-            self.csize_embedder = SizeEmbedder(hidden_size//3)  # c_size embed
-            self.ar_embedder = SizeEmbedder(hidden_size//3)     # aspect ratio embed
+            self.csize_embedder = SizeEmbedder(hidden_size // 3)  # c_size embed
+            self.ar_embedder = SizeEmbedder(hidden_size // 3)  # aspect ratio embed
         drop_path = [x.item() for x in torch.linspace(0, drop_path, depth)]  # stochastic depth decay rule
         if kv_compress_config is None:
             kv_compress_config = {
@@ -168,7 +175,7 @@ class PixArtMS(PixArt):
         x = x.to(self.dtype)
         timestep = t.to(self.dtype)
         y = y.to(self.dtype)
-        self.h, self.w = x.shape[-2]//self.patch_size, x.shape[-1]//self.patch_size
+        self.h, self.w = x.shape[-2] // self.patch_size, x.shape[-1] // self.patch_size
         pos_embed = torch.from_numpy(
             get_2d_sincos_pos_embed(
                 self.pos_embed.shape[-1], (self.h, self.w), pe_interpolation=self.pe_interpolation,
@@ -198,11 +205,12 @@ class PixArtMS(PixArt):
             y_lens = [y.shape[2]] * y.shape[0]
             y = y.squeeze(1).view(1, -1, x.shape[-1])
         for block in self.blocks:
-            x = auto_grad_checkpoint(block, x, y, t0, y_lens, (self.h, self.w), **kwargs)  # (N, T, D) #support grad checkpoint
+            x = auto_grad_checkpoint(block, x, y, t0, y_lens, (self.h, self.w),
+                                     **kwargs)  # (N, T, D) #support grad checkpoint
 
         x = self.final_layer(x, t)  # (N, T, patch_size ** 2 * out_channels)
         x = self.unpatchify(x)  # (N, out_channels, H, W)
-        
+
         return x
 
     def forward(self, x, timesteps, context, img_hw=None, aspect_ratio=None, **kwargs):
@@ -219,7 +227,7 @@ class PixArtMS(PixArt):
         data_info = {}
         if img_hw is None:
             data_info["img_hw"] = torch.tensor(
-                [[x.shape[2]*8, x.shape[3]*8]],
+                [[x.shape[2] * 8, x.shape[3] * 8]],
                 dtype=self.dtype,
                 device=x.device
             ).repeat(bs, 1)
@@ -227,7 +235,7 @@ class PixArtMS(PixArt):
             data_info["img_hw"] = img_hw.to(x.dtype).to(x.device)
         if aspect_ratio is None or True:
             data_info["aspect_ratio"] = torch.tensor(
-                [[x.shape[2]/x.shape[3]]],
+                [[x.shape[2] / x.shape[3]]],
                 dtype=self.dtype,
                 device=x.device
             ).repeat(bs, 1)
@@ -240,9 +248,9 @@ class PixArtMS(PixArt):
 
         ## run original forward pass
         out = self.forward_raw(
-            x = x.to(self.dtype),
-            t = timesteps.to(self.dtype),
-            y = context.to(self.dtype),
+            x=x.to(self.dtype),
+            t=timesteps.to(self.dtype),
+            y=context.to(self.dtype),
             data_info=data_info,
         )
 
