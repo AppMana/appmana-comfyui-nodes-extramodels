@@ -27,6 +27,6 @@ setup(
         ],
     },
     package_data={
-        package_or_module: ['*.json', 'spiece.model'] for package_or_module in packages
+        package_or_module: ['*.json', 'spiece.model', "*.txt"] for package_or_module in packages
     },
 )
