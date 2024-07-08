@@ -18,17 +18,12 @@ from timm.models.vision_transformer import Mlp, Attention as Attention_
 
 from comfy import model_management
 
-if model_management.xformers_enabled():
-    import xformers
-    import xformers.ops
-else:
-    print("""
-########################################
- PixArt: Not using xformers!
-  Expect images to be non-deterministic!
-  Batch sizes > 1 are most likely broken
-########################################
-""")
+try:
+    import xformers # pylint: disable=import-error
+    import xformers.ops # pylint: disable=import-error
+    assert xformers._has_cpp_library
+except:
+    pass
 
 
 def modulate(x, shift, scale):
