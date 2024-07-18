@@ -23,7 +23,7 @@ setup(
     include_package_data=True,
     entry_points={
         'comfyui.custom_nodes': [
-            'comfyui_extra_models = comfyui_extra_models',
+            'comfyui_extra_models = comfyui_extra_models.nodes',
         ],
     },
     package_data={

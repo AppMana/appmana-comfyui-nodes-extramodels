@@ -26,10 +26,9 @@ Q_4GB_LIMIT = 32000000
 from comfy import model_management
 
 if model_management.xpu_available:
-    import intel_extension_for_pytorch as ipex
     import os
     if not torch.xpu.has_fp64_dtype() and not os.environ.get('IPEX_FORCE_ATTENTION_SLICE', None):
-        from .IPEX.attention import scaled_dot_product_attention_32_bit
+        from ...IPEX.attention import scaled_dot_product_attention_32_bit
         sdpa_32b = scaled_dot_product_attention_32_bit
         print("Using IPEX 4GB SDPA workaround")
     else:
