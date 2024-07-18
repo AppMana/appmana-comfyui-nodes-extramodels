@@ -42,22 +42,22 @@ def reshape_for_broadcast(freqs_cis: Union[torch.Tensor, Tuple[torch.Tensor]], x
         # freqs_cis: (cos, sin) in real space
         if head_first:
             assert freqs_cis[0].shape == (
-            x.shape[-2], x.shape[-1]), f'freqs_cis shape {freqs_cis[0].shape} does not match x shape {x.shape}'
+                x.shape[-2], x.shape[-1]), f'freqs_cis shape {freqs_cis[0].shape} does not match x shape {x.shape}'
             shape = [d if i == ndim - 2 or i == ndim - 1 else 1 for i, d in enumerate(x.shape)]
         else:
             assert freqs_cis[0].shape == (
-            x.shape[1], x.shape[-1]), f'freqs_cis shape {freqs_cis[0].shape} does not match x shape {x.shape}'
+                x.shape[1], x.shape[-1]), f'freqs_cis shape {freqs_cis[0].shape} does not match x shape {x.shape}'
             shape = [d if i == 1 or i == ndim - 1 else 1 for i, d in enumerate(x.shape)]
         return freqs_cis[0].view(*shape), freqs_cis[1].view(*shape)
     else:
         # freqs_cis: values in complex space
         if head_first:
             assert freqs_cis.shape == (
-            x.shape[-2], x.shape[-1]), f'freqs_cis shape {freqs_cis.shape} does not match x shape {x.shape}'
+                x.shape[-2], x.shape[-1]), f'freqs_cis shape {freqs_cis.shape} does not match x shape {x.shape}'
             shape = [d if i == ndim - 2 or i == ndim - 1 else 1 for i, d in enumerate(x.shape)]
         else:
             assert freqs_cis.shape == (
-            x.shape[1], x.shape[-1]), f'freqs_cis shape {freqs_cis.shape} does not match x shape {x.shape}'
+                x.shape[1], x.shape[-1]), f'freqs_cis shape {freqs_cis.shape} does not match x shape {x.shape}'
             shape = [d if i == 1 or i == ndim - 1 else 1 for i, d in enumerate(x.shape)]
         return freqs_cis.view(*shape)
 
@@ -372,13 +372,10 @@ class Attention(nn.Module):
                 f'qq: {qq.shape}, q: {q.shape}, kk: {kk.shape}, k: {k.shape}'
             q, k = qq, kk
 
-        q = q * self.scale
-        attn = q @ k.transpose(-2, -1)  # [b, h, s, d] @ [b, h, d, s]
-        attn = attn.softmax(dim=-1)  # [b, h, s, s]
-        attn = self.attn_drop(attn)
-        x = attn @ v  # [b, h, s, d]
-
-        x = x.transpose(1, 2).reshape(B, N, C)  # [b, s, h, d]
+        # just use SDP here for now
+        x = torch.nn.functional.scaled_dot_product_attention(
+            q, k, v,
+        ).permute(0, 2, 1, 3).contiguous().reshape(B, N, C)
         x = self.out_proj(x)
         x = self.proj_drop(x)
 

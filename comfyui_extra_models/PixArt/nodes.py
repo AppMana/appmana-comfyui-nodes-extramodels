@@ -4,7 +4,7 @@ from comfy import utils
 from comfy.model_downloader import add_known_models, get_or_download, get_filename_list_with_downloadable, \
     KNOWN_CHECKPOINTS, KNOWN_LORAS
 from comfy.model_downloader_types import HuggingFile
-from comfy.sd3_clip import SD3Tokenizer, SD3ClipModel
+from comfy.text_encoders.sd3_clip import SD3Tokenizer, SD3ClipModel
 from .conf import pixart_conf, pixart_res
 from .loader import load_pixart
 from .lora import load_pixart_lora

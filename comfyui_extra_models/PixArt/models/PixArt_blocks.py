@@ -16,14 +16,32 @@ import torch.nn.functional as F
 from einops import rearrange
 from timm.models.vision_transformer import Mlp, Attention as Attention_
 
+sdpa_32b = None
+Q_4GB_LIMIT = 32000000
+"""If q is greater than this, the operation will likely require >4GB VRAM, which will fail on Intel Arc Alchemist GPUs without a workaround."""
+# 2k   = 37 748 736
+# 1024 =  9 437 184
+# 2k model goes very slightly over 4GB
+
 from comfy import model_management
 
-try:
-    import xformers # pylint: disable=import-error
-    import xformers.ops # pylint: disable=import-error
-    assert xformers._has_cpp_library
-except:
-    pass
+if model_management.xpu_available:
+    import intel_extension_for_pytorch as ipex
+    import os
+    if not torch.xpu.has_fp64_dtype() and not os.environ.get('IPEX_FORCE_ATTENTION_SLICE', None):
+        from .IPEX.attention import scaled_dot_product_attention_32_bit
+        sdpa_32b = scaled_dot_product_attention_32_bit
+        print("Using IPEX 4GB SDPA workaround")
+    else:
+        print("No IPEX 4GB workaround")
+elif model_management.xformers_enabled():
+    try:
+        import xformers # pylint: disable=import-error
+        import xformers.ops # pylint: disable=import-error
+        assert xformers._has_cpp_library
+    except:
+        pass
+
 
 
 def modulate(x, shift, scale):
@@ -83,10 +101,17 @@ class MultiHeadCrossAttention(nn.Module):
                 # create a mask on the diagonal for each mask in the batch
                 for n in range(B - 1):
                     attn_mask = torch.block_diag(attn_mask, attn_mask_template)
-            x = torch.nn.functional.scaled_dot_product_attention(
+            p = getattr(self.attn_drop, "p", 0)  # IPEX.optimize() will turn attn_drop into an Identity()
+
+            if sdpa_32b is not None and (q.element_size() * q.nelement()) > Q_4GB_LIMIT:
+                sdpa = sdpa_32b
+            else:
+                sdpa = torch.nn.functional.scaled_dot_product_attention
+
+            x = sdpa(
                 q, k, v,
                 attn_mask=attn_mask,
-                dropout_p=self.attn_drop.p
+                dropout_p=p
             ).permute(0, 2, 1, 3).contiguous()
         x = x.view(B, -1, C)
         x = self.proj(x)
@@ -192,9 +217,17 @@ class AttentionKVCompress(Attention_):
             )
         else:
             q, k, v = map(lambda t: t.transpose(1, 2), (q, k, v), )
-            x = torch.nn.functional.scaled_dot_product_attention(
+
+            p = getattr(self.attn_drop, "p", 0)  # IPEX.optimize() will turn attn_drop into an Identity()
+
+            if sdpa_32b is not None and (q.element_size() * q.nelement()) > Q_4GB_LIMIT:
+                sdpa = sdpa_32b
+            else:
+                sdpa = torch.nn.functional.scaled_dot_product_attention
+
+            x = sdpa(
                 q, k, v,
-                dropout_p=self.attn_drop.p,
+                dropout_p=p,
                 attn_mask=attn_bias
             ).transpose(1, 2).contiguous()
         x = x.view(B, N, C)

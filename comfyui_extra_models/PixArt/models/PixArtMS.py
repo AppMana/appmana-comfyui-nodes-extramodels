@@ -75,7 +75,7 @@ class PixArtMSBlock(nn.Module):
         B, N, C = x.shape
 
         shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = (
-                    self.scale_shift_table[None] + t.reshape(B, 6, -1)).chunk(6, dim=1)
+                self.scale_shift_table[None] + t.reshape(B, 6, -1)).chunk(6, dim=1)
         x = x + self.drop_path(gate_msa * self.attn(t2i_modulate(self.norm1(x), shift_msa, scale_msa), HW=HW))
         x = x + self.cross_attn(x, y, mask)
         x = x + self.drop_path(gate_mlp * self.mlp(t2i_modulate(self.norm2(x), shift_mlp, scale_mlp)))
@@ -180,7 +180,7 @@ class PixArtMS(PixArt):
         pe_interpolation = self.pe_interpolation
         if pe_interpolation is None or self.pe_precision is not None:
             # calculate pe_interpolation on-the-fly
-            pe_interpolation = round((x.shape[-1]+x.shape[-2])/2.0 / (512/8.0), self.pe_precision or 0)
+            pe_interpolation = round((x.shape[-1] + x.shape[-2]) / 2.0 / (512 / 8.0), self.pe_precision or 0)
 
         self.h, self.w = x.shape[-2] // self.patch_size, x.shape[-1] // self.patch_size
         pos_embed = torch.from_numpy(
@@ -188,7 +188,7 @@ class PixArtMS(PixArt):
                 self.pos_embed.shape[-1], (self.h, self.w), pe_interpolation=pe_interpolation,
                 base_size=self.base_size
             )
-        ).unsqueeze(0).to(x.device).to(self.dtype)
+        ).unsqueeze(0).to(device=x.device, dtype=self.dtype)
 
         x = self.x_embedder(x) + pos_embed  # (N, T, D), where T = H * W / patch_size ** 2
         t = self.t_embedder(timestep)  # (N, D)
@@ -239,7 +239,7 @@ class PixArtMS(PixArt):
                 device=x.device
             ).repeat(bs, 1)
         else:
-            data_info["img_hw"] = img_hw.to(x.dtype).to(x.device)
+            data_info["img_hw"] = img_hw.to(dtype=x.dtype, device=x.device)
         if aspect_ratio is None or True:
             data_info["aspect_ratio"] = torch.tensor(
                 [[x.shape[2] / x.shape[3]]],
@@ -247,7 +247,7 @@ class PixArtMS(PixArt):
                 device=x.device
             ).repeat(bs, 1)
         else:
-            data_info["aspect_ratio"] = aspect_ratio.to(x.dtype).to(x.device)
+            data_info["aspect_ratio"] = aspect_ratio.to(dtype=x.dtype, device=x.device)
 
         ## Still accepts the input w/o that dim but returns garbage
         if len(context.shape) == 3:
