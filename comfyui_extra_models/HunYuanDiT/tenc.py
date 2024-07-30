@@ -9,6 +9,7 @@ import comfy.model_patcher
 import comfy.utils
 from comfy import model_management
 from comfy.component_model.files import get_package_as_path
+from comfy.model_management import load_models_gpu
 
 
 class mT5Model(torch.nn.Module):
@@ -134,7 +135,7 @@ class EXM_HyDiT_Tenc_Temp:
 
     def load_model(self):
         if self.load_device != "cpu":
-            model_management.load_model_gpu(self.patcher)
+            load_models_gpu([self.patcher])
         return self.patcher
 
     def add_patches(self, patches, strength_patch=1.0, strength_model=1.0):

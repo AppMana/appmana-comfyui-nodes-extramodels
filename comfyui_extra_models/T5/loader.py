@@ -3,6 +3,7 @@ import os
 import comfy.model_patcher
 import comfy.utils
 from comfy import model_management
+from comfy.model_management import load_models_gpu
 from .t5v11 import T5v11Model, T5v11Tokenizer
 
 
@@ -88,7 +89,7 @@ class EXM_T5v11:
 
     def load_model(self):
         if self.load_device != "cpu":
-            model_management.load_model_gpu(self.patcher)
+            load_models_gpu([self.patcher])
         return self.patcher
 
     def add_patches(self, patches, strength_patch=1.0, strength_model=1.0):
