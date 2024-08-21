@@ -38,6 +38,8 @@ class EXM_PixArt_ModelPatcher(ModelPatcher):
             if len(v) == 2:
                 patch_type = v[0]
                 v = v[1]
+            else:
+                raise ValueError(f"missing patch_type in {v}")
 
             if patch_type == "lora":
                 mat1 = comfy.model_management.cast_to_device(v[0], weight.device, torch.float32)
@@ -65,7 +67,7 @@ class EXM_PixArt_ModelPatcher(ModelPatcher):
         return weight
 
     def clone(self):
-        n = EXM_PixArt_ModelPatcher(self.model, self.load_device, self.offload_device, self.size, self.current_device,
+        n = EXM_PixArt_ModelPatcher(self.model, self.load_device, self.offload_device, self.size,
                                     weight_inplace_update=self.weight_inplace_update)
         n.patches = {}
         for k in self.patches:
@@ -73,7 +75,7 @@ class EXM_PixArt_ModelPatcher(ModelPatcher):
 
         n.object_patches = self.object_patches.copy()
         n.model_options = copy.deepcopy(self.model_options)
-        n.model_keys = self.model_keys
+        # n.model_keys = self.model_keys
         return n
 
 
@@ -83,7 +85,6 @@ def replace_model_patcher(model):
         size=model.size,
         load_device=model.load_device,
         offload_device=model.offload_device,
-        current_device=model.current_device,
         weight_inplace_update=model.weight_inplace_update,
     )
     n.patches = {}
