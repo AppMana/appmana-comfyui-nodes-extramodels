@@ -4,6 +4,5 @@ sentencepiece>=0.1.97
 transformers>=4.34.1
 accelerate>=0.23.0
 einops>=0.6.0
-flash-attn @ https://github.com/AppMana/appmana-comfyui-nodes-extramodels/releases/download/v0.0.0-flash_attn/flash_attn-2.5.9.post1-cp311-cp311-win_amd64.whl ;platform_system == 'Windows' and python_version == '3.11'
 flash-attn ;platform_system == 'Linux'
 protobuf>=3.20.3
